@@ -1,4 +1,4 @@
-class Api::V1::DealsController < ApplicationController
+class Api::DealsController < ApplicationController
   def index
     deals = Deal.includes(:company, :blocks, :interests).order(created_at: :desc)
 

@@ -1,4 +1,4 @@
-class Api::V1::PeopleController < ApplicationController
+class Api::PeopleController < ApplicationController
   def index
     people = Person.includes(employments: :organization).order(:last_name, :first_name)
 

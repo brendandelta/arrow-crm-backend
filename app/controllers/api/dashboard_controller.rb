@@ -1,4 +1,4 @@
-class Api::V1::DashboardController < ApplicationController
+class Api::DashboardController < ApplicationController
   def show
     # Deal stats
     deals = Deal.all

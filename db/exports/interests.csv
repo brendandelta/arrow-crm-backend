@@ -1,8 +1,0 @@
-id,deal_id,investor_id,contact_id,decision_maker_id,target_cents,min_cents,max_cents,committed_cents,allocated_cents,status,status_changed_at,pass_reason,pass_notes,allocated_block_id,wired_at,wire_amount_cents,source,source_detail,introduced_by_id,first_contacted_at,last_contacted_at,meetings_count,response_time_days,owner_id,internal_notes,next_step,next_step_at,created_at,updated_at
-1,54,611,,,1000000000,,,1000000000,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-2,51,580,,,,,,,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-3,56,551,,,,,,,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-4,57,552,,,,,,,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-5,52,594,,,,,,,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-6,52,614,,,,,,,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC
-7,63,574,,,100000000,,,100000000,,pending,,,,,,,,,,,,0,,,,,,2026-01-19 16:32:33 UTC,2026-01-19 16:32:33 UTC

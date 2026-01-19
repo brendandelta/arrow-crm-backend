@@ -1,4 +1,4 @@
-class Api::V1::OrganizationsController < ApplicationController
+class Api::OrganizationsController < ApplicationController
   def index
     organizations = Organization.includes(:employments, :deals).order(:name)
 
