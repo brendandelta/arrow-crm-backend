@@ -1,0 +1,4 @@
+id,email,first_name,last_name,phone,avatar_url,calendar_id,timezone,role,is_active,last_seen_at,created_at,updated_at
+22,gabe@arrow.fund,Gabriel,Borden,,,,America/New_York,member,true,,2026-01-19 16:32:32 UTC,2026-01-19 16:32:32 UTC
+23,chris@arrow.fund,Chris,Clifford,,,,America/New_York,member,true,,2026-01-19 16:32:32 UTC,2026-01-19 16:32:32 UTC
+24,brendan@arrow.fund,Brendan,Conn,,,,America/New_York,member,true,,2026-01-19 16:32:32 UTC,2026-01-19 16:32:32 UTC
