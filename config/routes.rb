@@ -5,9 +5,15 @@ Rails.application.routes.draw do
     get "dashboard", to: "dashboard#show"
 
     resources :deals, only: [:index, :show, :create, :update] do
+      collection do
+        get :stats             # GET /api/deals/stats
+      end
       # Nested routes for deal targets
       resources :targets, controller: "deal_targets", only: [:index, :create]
     end
+
+    # Advantages for deals (hidden in LP mode)
+    resources :advantages, only: [:index, :show, :create, :update, :destroy]
 
     resources :organizations, only: [:index, :show, :create, :update]
     resources :people, only: [:index, :show, :create, :update] do

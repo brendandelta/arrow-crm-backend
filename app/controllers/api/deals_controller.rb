@@ -1,8 +1,12 @@
 class Api::DealsController < ApplicationController
   def index
-    deals = Deal.includes(:company, :blocks, :interests, :deal_targets).order(created_at: :desc)
+    deals = Deal.includes(:company, :owner, :blocks, :interests, :deal_targets, :activities, :documents).order(created_at: :desc)
 
     render json: deals.map { |deal|
+      overdue_tasks = deal.activities.overdue_tasks.count
+      due_this_week = deal.activities.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
+      risk_flags = deal.risk_flags.present? ? deal.risk_flags : deal.compute_risk_flags
+
       {
         id: deal.id,
         name: deal.name,
@@ -15,16 +19,72 @@ class Api::DealsController < ApplicationController
         dealOwner: deal.deal_owner,
         priority: deal.priority,
         priorityLabel: deal.priority_label,
+        owner: deal.owner ? {
+          id: deal.owner.id,
+          firstName: deal.owner.first_name,
+          lastName: deal.owner.last_name
+        } : nil,
         blocks: deal.blocks.count,
+        blocksValue: deal.blocks.sum(:total_cents),
         interests: deal.interests.count,
         targets: deal.deal_targets.count,
         activeTargets: deal.deal_targets.active.count,
         committed: deal.committed_cents || 0,
         closed: deal.closed_cents || 0,
         softCircled: deal.soft_circled_cents,
+        wired: deal.wired_cents,
+        totalCommitted: deal.total_committed_cents,
+        inventory: deal.inventory_cents,
+        coverageRatio: deal.coverage_ratio,
         valuation: deal.valuation_cents,
         expectedClose: deal.expected_close,
-        sourcedAt: deal.sourced_at
+        deadline: deal.deadline,
+        daysUntilClose: deal.days_until_close,
+        sourcedAt: deal.sourced_at,
+        bestPrice: deal.best_price_block&.price_cents,
+        overdueTasksCount: overdue_tasks,
+        dueThisWeekCount: due_this_week,
+        riskFlags: risk_flags,
+        riskFlagsSummary: {
+          count: risk_flags.values.count { |f| f.is_a?(Hash) && f[:active] },
+          hasDanger: risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "danger" },
+          hasWarning: risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "warning" }
+        },
+        demandFunnel: {
+          prospecting: deal.interests.prospecting.count,
+          contacted: deal.interests.contacted.count,
+          softCircled: deal.interests.soft_circled.count,
+          committed: deal.interests.committed.count,
+          allocated: deal.interests.allocated.count,
+          funded: deal.interests.funded.count
+        },
+        targetsNeedingFollowup: deal.deal_targets.active.where("last_activity_at < ? OR last_activity_at IS NULL", 7.days.ago).count
+      }
+    }
+  end
+
+  def stats
+    deals = Deal.includes(:interests, :blocks, :activities)
+
+    live_deals = deals.by_status("live")
+    at_risk = deals.active.select { |d| d.compute_risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "danger" } }
+
+    render json: {
+      liveCount: live_deals.count,
+      totalDeals: deals.count,
+      activeDeals: deals.active.count,
+      totalSoftCircled: live_deals.sum(&:soft_circled_cents),
+      totalCommitted: live_deals.sum(&:total_committed_cents),
+      totalWired: live_deals.sum(&:wired_cents),
+      totalInventory: live_deals.sum(&:inventory_cents),
+      atRiskCount: at_risk.count,
+      overdueTasksCount: Activity.open_tasks.overdue_tasks.joins(:deal).where(deals: { status: %w[sourcing live closing] }).count,
+      byStatus: {
+        sourcing: deals.by_status("sourcing").count,
+        live: deals.by_status("live").count,
+        closing: deals.by_status("closing").count,
+        closed: deals.by_status("closed").count,
+        dead: deals.by_status("dead").count
       }
     }
   end
@@ -32,10 +92,36 @@ class Api::DealsController < ApplicationController
   def show
     deal = Deal.includes(
       :company,
-      blocks: [:seller, :contact, :broker, :broker_contact],
-      interests: [:investor, :contact, :decision_maker],
-      deal_targets: [:target, :owner]
+      :owner,
+      :advantages,
+      :documents,
+      blocks: [:seller, :contact, :broker, :broker_contact, :interests],
+      interests: [:investor, :contact, :decision_maker, :allocated_block],
+      deal_targets: [:target, :owner, :activities],
+      activities: [:performed_by, :assigned_to]
     ).find(params[:id])
+
+    best_block = deal.best_price_block
+    next_deadline = deal.next_deadline
+    biggest_constraint = deal.biggest_constraint
+    risk_flags = deal.risk_flags.present? ? deal.risk_flags : deal.compute_risk_flags
+
+    # Document checklist
+    existing_doc_kinds = deal.documents.pluck(:kind).compact
+    doc_checklist = Document::DILIGENCE_KINDS.map do |kind|
+      {
+        kind: kind,
+        label: kind.titleize,
+        category: Document::DILIGENCE_CATEGORIES.find { |_, kinds| kinds.include?(kind) }&.first || "Other",
+        present: existing_doc_kinds.include?(kind),
+        document: deal.documents.find { |d| d.kind == kind }&.then { |d|
+          { id: d.id, name: d.name, url: d.url, uploadedAt: d.created_at }
+        }
+      }
+    end
+
+    # Missing critical doc for truth panel
+    missing_doc = doc_checklist.find { |d| !d[:present] }
 
     render json: {
       id: deal.id,
@@ -55,16 +141,26 @@ class Api::DealsController < ApplicationController
       priority: deal.priority,
       priorityLabel: deal.priority_label,
       confidence: deal.confidence,
+      owner: deal.owner ? {
+        id: deal.owner.id,
+        firstName: deal.owner.first_name,
+        lastName: deal.owner.last_name,
+        email: deal.owner.email
+      } : nil,
       committed: deal.committed_cents || 0,
       closed: deal.closed_cents || 0,
       softCircled: deal.soft_circled_cents,
       totalCommitted: deal.total_committed_cents,
+      wired: deal.wired_cents,
+      inventory: deal.inventory_cents,
+      coverageRatio: deal.coverage_ratio,
       target: deal.target_cents,
       valuation: deal.valuation_cents,
       sharePrice: deal.share_price_cents,
       shareClass: deal.share_class,
       expectedClose: deal.expected_close,
       deadline: deal.deadline,
+      daysUntilClose: deal.days_until_close,
       sourcedAt: deal.sourced_at,
       qualifiedAt: deal.qualified_at,
       closedAt: deal.closed_at,
@@ -77,9 +173,59 @@ class Api::DealsController < ApplicationController
       tags: deal.tags || [],
       notes: deal.internal_notes,
       structureNotes: deal.structure_notes,
-      blocks: deal.blocks.map { |b| block_json(b) },
-      interests: deal.interests.map { |i| interest_json(i) },
-      targets: deal.deal_targets.map { |t| deal_target_json(t) },
+
+      # Truth Panel data
+      truthPanel: {
+        bestPrice: best_block ? {
+          priceCents: best_block.price_cents,
+          source: best_block.seller&.name || best_block.source,
+          blockId: best_block.id
+        } : nil,
+        biggestConstraint: biggest_constraint,
+        missingDoc: missing_doc ? {
+          kind: missing_doc[:kind],
+          label: missing_doc[:label]
+        } : nil,
+        nextDeadline: next_deadline,
+        blocking: risk_flags[:deadline_risk] || risk_flags[:overdue_tasks]
+      },
+
+      # Tasks summary
+      tasksSummary: deal.tasks_summary,
+
+      # Demand funnel
+      demandFunnel: deal.demand_funnel,
+
+      # Risk flags
+      riskFlags: risk_flags,
+
+      # Document checklist
+      documentChecklist: {
+        total: Document::DILIGENCE_KINDS.count,
+        completed: existing_doc_kinds.count { |k| Document::DILIGENCE_KINDS.include?(k) },
+        completionPercent: (existing_doc_kinds.count { |k| Document::DILIGENCE_KINDS.include?(k) }.to_f / Document::DILIGENCE_KINDS.count * 100).round(0),
+        items: doc_checklist
+      },
+
+      # Advantages (hidden in LP mode on frontend)
+      advantages: deal.advantages.recent.map { |a|
+        {
+          id: a.id,
+          kind: a.kind,
+          title: a.title,
+          description: a.description,
+          confidence: a.confidence,
+          confidenceLabel: a.confidence_label,
+          timeliness: a.timeliness,
+          timelinessLabel: a.timeliness_label,
+          source: a.source,
+          createdAt: a.created_at
+        }
+      },
+
+      blocks: deal.blocks.map { |b| block_json(b, include_interests: true) },
+      interests: deal.interests.map { |i| interest_json(i, include_block: true) },
+      targets: deal.deal_targets.map { |t| deal_target_json(t, include_activities: true) },
       targetsSummary: {
         total: deal.deal_targets.count,
         active: deal.deal_targets.active.count,
@@ -87,8 +233,21 @@ class Api::DealsController < ApplicationController
         contacted: deal.deal_targets.contacted.count,
         engaged: deal.deal_targets.engaged.count,
         committed: deal.deal_targets.committed.count,
-        passed: deal.deal_targets.passed.count
+        passed: deal.deal_targets.passed.count,
+        needsFollowup: deal.deal_targets.active.where("last_activity_at < ? OR last_activity_at IS NULL", 7.days.ago).count
       },
+
+      # All activities for feed
+      activities: deal.activities.recent.limit(50).map { |a| activity_json(a) },
+
+      # Tasks grouped by status
+      tasks: {
+        overdue: deal.activities.overdue_tasks.order(task_due_at: :asc).map { |a| task_json(a) },
+        dueThisWeek: deal.activities.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).order(task_due_at: :asc).map { |a| task_json(a) },
+        backlog: deal.activities.open_tasks.where("task_due_at > ? OR task_due_at IS NULL", Time.current.end_of_week).order(task_due_at: :asc).limit(20).map { |a| task_json(a) },
+        completed: deal.activities.completed_tasks.order(updated_at: :desc).limit(10).map { |a| task_json(a) }
+      },
+
       recentActivities: deal.activities.recent.limit(5).map { |a|
         {
           id: a.id,
@@ -138,8 +297,54 @@ class Api::DealsController < ApplicationController
     )
   end
 
-  def block_json(block)
+  def activity_json(activity)
     {
+      id: activity.id,
+      kind: activity.kind,
+      subject: activity.subject,
+      body: activity.body,
+      occurredAt: activity.occurred_at,
+      startsAt: activity.starts_at,
+      endsAt: activity.ends_at,
+      outcome: activity.outcome,
+      direction: activity.direction,
+      isTask: activity.is_task,
+      taskCompleted: activity.task_completed,
+      taskDueAt: activity.task_due_at,
+      performedBy: activity.performed_by ? {
+        id: activity.performed_by.id,
+        firstName: activity.performed_by.first_name,
+        lastName: activity.performed_by.last_name
+      } : nil,
+      assignedTo: activity.assigned_to ? {
+        id: activity.assigned_to.id,
+        firstName: activity.assigned_to.first_name,
+        lastName: activity.assigned_to.last_name
+      } : nil,
+      createdAt: activity.created_at
+    }
+  end
+
+  def task_json(task)
+    {
+      id: task.id,
+      subject: task.subject,
+      body: task.body,
+      dueAt: task.task_due_at,
+      completed: task.task_completed,
+      overdue: task.overdue?,
+      assignedTo: task.assigned_to ? {
+        id: task.assigned_to.id,
+        firstName: task.assigned_to.first_name,
+        lastName: task.assigned_to.last_name
+      } : nil,
+      createdAt: task.created_at,
+      updatedAt: task.updated_at
+    }
+  end
+
+  def block_json(block, include_interests: false)
+    result = {
       id: block.id,
       seller: block.seller ? {
         id: block.seller.id,
@@ -184,10 +389,25 @@ class Api::DealsController < ApplicationController
       internalNotes: block.internal_notes,
       createdAt: block.created_at
     }
+
+    if include_interests
+      result[:mappedInterests] = block.interests.map do |i|
+        {
+          id: i.id,
+          investor: i.investor&.name,
+          committedCents: i.committed_cents,
+          status: i.status
+        }
+      end
+      result[:mappedInterestsCount] = block.interests.count
+      result[:mappedCommittedCents] = block.interests.sum(:committed_cents)
+    end
+
+    result
   end
 
-  def interest_json(interest)
-    {
+  def interest_json(interest, include_block: false)
+    result = {
       id: interest.id,
       investor: interest.investor ? {
         id: interest.investor.id,
@@ -217,13 +437,28 @@ class Api::DealsController < ApplicationController
       nextStep: interest.next_step,
       nextStepAt: interest.next_step_at,
       internalNotes: interest.internal_notes,
-      createdAt: interest.created_at
+      createdAt: interest.created_at,
+      updatedAt: interest.updated_at,
+      isStale: interest.updated_at < 7.days.ago
     }
+
+    if include_block && interest.allocated_block
+      result[:allocatedBlock] = {
+        id: interest.allocated_block.id,
+        seller: interest.allocated_block.seller&.name,
+        priceCents: interest.allocated_block.price_cents,
+        status: interest.allocated_block.status
+      }
+    end
+
+    result
   end
 
-  def deal_target_json(deal_target)
+  def deal_target_json(deal_target, include_activities: false)
     target = deal_target.target
-    {
+    is_stale = deal_target.last_activity_at.nil? || deal_target.last_activity_at < 7.days.ago
+
+    result = {
       id: deal_target.id,
       targetType: deal_target.target_type,
       targetId: deal_target.target_id,
@@ -253,15 +488,34 @@ class Api::DealsController < ApplicationController
       role: deal_target.role,
       priority: deal_target.priority,
       priorityLabel: deal_target.priority_label,
+      firstContactedAt: deal_target.first_contacted_at,
+      lastContactedAt: deal_target.last_contacted_at,
       lastActivityAt: deal_target.last_activity_at,
       activityCount: deal_target.activity_count,
       nextStep: deal_target.next_step,
       nextStepAt: deal_target.next_step_at,
+      isStale: is_stale,
+      daysSinceContact: deal_target.last_activity_at ? (Date.current - deal_target.last_activity_at.to_date).to_i : nil,
       owner: deal_target.owner ? {
         id: deal_target.owner.id,
         firstName: deal_target.owner.first_name,
         lastName: deal_target.owner.last_name
-      } : nil
+      } : nil,
+      notes: deal_target.notes
     }
+
+    if include_activities
+      result[:recentActivities] = deal_target.activities.recent.limit(5).map do |a|
+        {
+          id: a.id,
+          kind: a.kind,
+          subject: a.subject,
+          occurredAt: a.occurred_at,
+          outcome: a.outcome
+        }
+      end
+    end
+
+    result
   end
 end

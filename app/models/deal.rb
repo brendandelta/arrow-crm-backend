@@ -8,6 +8,7 @@ class Deal < ApplicationRecord
   has_many :notes, as: :parent, dependent: :destroy
   has_many :deal_targets, dependent: :destroy
   has_many :activities, dependent: :destroy
+  has_many :advantages, dependent: :destroy
 
   validates :name, presence: true
   validates :status, presence: true
@@ -107,5 +108,189 @@ class Deal < ApplicationRecord
   def days_since_launch
     return nil unless launched_at
     (Date.current - launched_at.to_date).to_i
+  end
+
+  # Wired/funded amount from interests
+  def wired_cents
+    interests.funded.sum(:committed_cents)
+  end
+
+  def wired_dollars
+    wired_cents.to_f / 100
+  end
+
+  # Inventory from available blocks
+  def inventory_cents
+    blocks.available.sum(:total_cents)
+  end
+
+  def inventory_dollars
+    inventory_cents.to_f / 100
+  end
+
+  # Coverage ratio: committed / inventory
+  def coverage_ratio
+    return nil if inventory_cents.nil? || inventory_cents.zero?
+    (total_committed_cents.to_f / inventory_cents * 100).round(1)
+  end
+
+  # Best priced available block
+  def best_price_block
+    blocks.available.where.not(price_cents: nil).order(price_cents: :asc).first
+  end
+
+  # Next deadline - earliest of close date, deadline, or task due
+  def next_deadline
+    dates = []
+    dates << { date: expected_close, type: "expected_close", label: "Expected Close" } if expected_close
+    dates << { date: deadline, type: "deadline", label: "Deadline" } if deadline
+
+    # Get earliest overdue or upcoming task
+    next_task = activities.where(is_task: true, task_completed: false)
+                         .where.not(task_due_at: nil)
+                         .order(task_due_at: :asc)
+                         .first
+    dates << { date: next_task.task_due_at.to_date, type: "task", label: next_task.subject || "Task due" } if next_task
+
+    dates.min_by { |d| d[:date] }
+  end
+
+  # Days until close date
+  def days_until_close
+    return nil unless expected_close
+    (expected_close.to_date - Date.current).to_i
+  end
+
+  # Auto-compute risk flags based on deal state
+  def compute_risk_flags
+    flags = {}
+
+    # Pricing stale: no price updates in 30+ days on blocks
+    latest_block_update = blocks.maximum(:updated_at)
+    if latest_block_update && latest_block_update < 30.days.ago
+      flags[:pricing_stale] = {
+        active: true,
+        message: "Block pricing not updated in 30+ days",
+        severity: "warning"
+      }
+    end
+
+    # Coverage low: committed < 50% of inventory
+    if inventory_cents&.positive? && coverage_ratio && coverage_ratio < 50
+      flags[:coverage_low] = {
+        active: true,
+        message: "Coverage ratio below 50%",
+        severity: "warning"
+      }
+    end
+
+    # Missing docs: critical diligence documents missing
+    required_docs = Document::DILIGENCE_KINDS rescue []
+    if required_docs.any?
+      existing_kinds = documents.pluck(:kind).compact
+      missing = required_docs - existing_kinds
+      if missing.any?
+        flags[:missing_docs] = {
+          active: true,
+          message: "Missing #{missing.count} required documents",
+          missing: missing,
+          severity: "info"
+        }
+      end
+    end
+
+    # Deadline risk: closing within 7 days with low coverage
+    if days_until_close && days_until_close <= 7 && days_until_close >= 0
+      if coverage_ratio.nil? || coverage_ratio < 80
+        flags[:deadline_risk] = {
+          active: true,
+          message: "Close date in #{days_until_close} days with #{coverage_ratio || 0}% coverage",
+          severity: "danger"
+        }
+      end
+    end
+
+    # Stale outreach: active targets with no activity in 7+ days
+    stale_targets = deal_targets.active.where("last_activity_at < ? OR last_activity_at IS NULL", 7.days.ago).count
+    if stale_targets > 0
+      flags[:stale_outreach] = {
+        active: true,
+        message: "#{stale_targets} targets need follow-up",
+        count: stale_targets,
+        severity: "warning"
+      }
+    end
+
+    # Overdue tasks
+    overdue_count = activities.overdue_tasks.count
+    if overdue_count > 0
+      flags[:overdue_tasks] = {
+        active: true,
+        message: "#{overdue_count} overdue tasks",
+        count: overdue_count,
+        severity: "danger"
+      }
+    end
+
+    flags
+  end
+
+  # Update risk flags and save
+  def update_risk_flags!
+    update!(risk_flags: compute_risk_flags)
+  end
+
+  # Tasks summary
+  def tasks_summary
+    tasks = activities.where(is_task: true)
+    {
+      total: tasks.count,
+      completed: tasks.completed_tasks.count,
+      overdue: tasks.overdue_tasks.count,
+      due_this_week: tasks.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
+    }
+  end
+
+  # Demand funnel counts
+  def demand_funnel
+    {
+      prospecting: interests.prospecting.count,
+      contacted: interests.contacted.count,
+      soft_circled: interests.soft_circled.count,
+      committed: interests.committed.count,
+      allocated: interests.allocated.count,
+      funded: interests.funded.count,
+      declined: interests.declined.count,
+      withdrawn: interests.withdrawn.count
+    }
+  end
+
+  # Biggest constraint - determine what's blocking progress
+  def biggest_constraint
+    # Check various constraints in priority order
+    if inventory_cents.nil? || inventory_cents.zero?
+      return { type: "no_inventory", message: "No available inventory" }
+    end
+
+    if interests.active.count.zero?
+      return { type: "no_demand", message: "No active investor interest" }
+    end
+
+    overdue = tasks_summary[:overdue]
+    if overdue > 0
+      return { type: "overdue_tasks", message: "#{overdue} overdue tasks blocking progress" }
+    end
+
+    missing_docs = compute_risk_flags[:missing_docs]
+    if missing_docs && missing_docs[:missing]&.any?
+      return { type: "missing_docs", message: "Missing critical documents: #{missing_docs[:missing].first}" }
+    end
+
+    stale = compute_risk_flags[:stale_outreach]
+    if stale && stale[:count] > 3
+      return { type: "stale_outreach", message: "#{stale[:count]} targets awaiting follow-up" }
+    end
+
+    nil
   end
 end

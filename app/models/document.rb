@@ -5,12 +5,42 @@ class Document < ApplicationRecord
   validates :name, presence: true
   validates :url, presence: true
 
+  # Required diligence document types for deals
+  DILIGENCE_KINDS = %w[
+    cap_table
+    financials
+    investor_deck
+    data_room_access
+    legal_docs
+    term_sheet
+    subscription_agreement
+    side_letter
+    company_formation
+    audit_report
+  ].freeze
+
+  # Categories for document organization
+  DILIGENCE_CATEGORIES = {
+    "Financial" => %w[cap_table financials audit_report],
+    "Legal" => %w[legal_docs term_sheet subscription_agreement side_letter company_formation],
+    "Marketing" => %w[investor_deck data_room_access]
+  }.freeze
+
   scope :confidential, -> { where(is_confidential: true) }
   scope :public_docs, -> { where(is_confidential: false) }
   scope :by_kind, ->(kind) { where(kind: kind) }
+  scope :diligence, -> { where(kind: DILIGENCE_KINDS) }
   scope :expiring_soon, -> { where("expires_at <= ?", 30.days.from_now) }
   scope :expired, -> { where("expires_at < ?", Date.current) }
   scope :recent, -> { order(created_at: :desc) }
+
+  def diligence?
+    DILIGENCE_KINDS.include?(kind)
+  end
+
+  def category
+    DILIGENCE_CATEGORIES.find { |_, kinds| kinds.include?(kind) }&.first || "Other"
+  end
 
   def expired?
     expires_at.present? && expires_at < Date.current
