@@ -10,10 +10,11 @@ class Api::DashboardController < ApplicationController
     # People stats
     people = Person.all
 
-    # Meeting stats
-    meetings = Meeting.all
+    # Activity stats
+    activities = Activity.all
     week_start = Date.current.beginning_of_week
-    meetings_this_week = meetings.where("starts_at >= ?", week_start)
+    activities_this_week = activities.where("occurred_at >= ?", week_start)
+    scheduled_activities = activities.scheduled
 
     # Pipeline
     total_committed = deals.sum(:committed_cents) || 0
@@ -36,9 +37,10 @@ class Api::DashboardController < ApplicationController
           champions: people.where(warmth: 3).count,
           hot: people.where(warmth: 2).count
         },
-        meetings: {
-          total: meetings.count,
-          thisWeek: meetings_this_week.count
+        activities: {
+          total: activities.count,
+          thisWeek: activities_this_week.count,
+          scheduled: scheduled_activities.count
         },
         pipeline: {
           committed: total_committed,
@@ -55,13 +57,15 @@ class Api::DashboardController < ApplicationController
           interests: deal.interests.count
         }
       },
-      recentMeetings: meetings.includes(:deal).order(starts_at: :desc).limit(5).map { |meeting|
+      recentActivities: activities.includes(:deal, :activity_attendees).recent.limit(5).map { |activity|
         {
-          id: meeting.id,
-          title: meeting.title,
-          deal: meeting.deal&.name,
-          attendees: (meeting.attendee_ids&.length || 0) + (meeting.internal_attendee_ids&.length || 0),
-          startsAt: meeting.starts_at
+          id: activity.id,
+          kind: activity.kind,
+          subject: activity.subject,
+          deal: activity.deal&.name,
+          attendees: activity.activity_attendees.count,
+          occurredAt: activity.occurred_at,
+          startsAt: activity.starts_at
         }
       }
     }

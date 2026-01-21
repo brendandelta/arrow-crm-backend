@@ -75,4 +75,42 @@ class Api::OrganizationsController < ApplicationController
       updatedAt: org.updated_at
     }
   end
+
+  def create
+    org = Organization.new(organization_params)
+
+    if org.save
+      render json: {
+        id: org.id,
+        name: org.name,
+        kind: org.kind
+      }, status: :created
+    else
+      render json: { errors: org.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  def update
+    org = Organization.find(params[:id])
+
+    if org.update(organization_params)
+      render json: {
+        id: org.id,
+        name: org.name,
+        kind: org.kind
+      }
+    else
+      render json: { errors: org.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  private
+
+  def organization_params
+    params.permit(:name, :kind, :legal_name, :description, :logo_url, :website,
+                  :linkedin_url, :twitter_url, :phone, :email,
+                  :address_line1, :address_line2, :city, :state, :postal_code, :country,
+                  :sector, :sub_sector, :stage, :employee_range, :warmth,
+                  :internal_notes, :next_follow_up_at, tags: [], meta: {})
+  end
 end

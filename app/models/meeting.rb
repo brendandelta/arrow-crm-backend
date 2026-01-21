@@ -14,8 +14,9 @@ class Meeting < ApplicationRecord
   scope :calls, -> { where(kind: "call") }
   scope :in_person, -> { where(kind: "in_person") }
   scope :video, -> { where(kind: "video") }
-  scope :completed, -> { where(is_completed: true) }
-  scope :pending, -> { where(is_completed: false) }
+  # Note: is_completed column doesn't exist yet - remove these scopes or add migration
+  # scope :completed, -> { where(is_completed: true) }
+  # scope :pending, -> { where(is_completed: false) }
 
   def call? = kind == "call"
   def in_person? = kind == "in_person"
@@ -28,12 +29,12 @@ class Meeting < ApplicationRecord
   end
 
   def attendees
-    return [] if attendee_person_ids.blank?
-    Person.where(id: attendee_person_ids)
+    return [] if attendee_ids.blank?
+    Person.where(id: attendee_ids)
   end
 
   def attendee_count
-    attendee_person_ids&.length || 0
+    attendee_ids&.length || 0
   end
 
   def past?

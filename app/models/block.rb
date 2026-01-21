@@ -1,41 +1,62 @@
 class Block < ApplicationRecord
+  # Heat levels: cold (0), warm (1), hot (2), fire (3)
+  HEAT_LEVELS = { cold: 0, warm: 1, hot: 2, fire: 3 }.freeze
+  STATUSES = %w[available reserved sold withdrawn].freeze
+
   belongs_to :deal
-  belongs_to :seller, class_name: "Person"
+  belongs_to :seller, class_name: "Organization", optional: true
+  belongs_to :contact, class_name: "Person", optional: true
+  belongs_to :broker, class_name: "Organization", optional: true
+  belongs_to :broker_contact, class_name: "Person", optional: true
+
+  has_many :interests, foreign_key: :allocated_block_id
 
   validates :deal_id, presence: true
-  validates :seller_id, presence: true
-  validates :status, presence: true
+  validates :status, presence: true, inclusion: { in: STATUSES }
+  validates :heat, inclusion: { in: HEAT_LEVELS.values }, allow_nil: true
 
   scope :available, -> { where(status: "available") }
   scope :reserved, -> { where(status: "reserved") }
   scope :sold, -> { where(status: "sold") }
   scope :withdrawn, -> { where(status: "withdrawn") }
   scope :by_share_class, ->(share_class) { where(share_class: share_class) }
+  scope :by_heat, ->(heat) { where(heat: heat) }
+  scope :hot_or_fire, -> { where(heat: [2, 3]) }
 
   def available? = status == "available"
   def reserved? = status == "reserved"
   def sold? = status == "sold"
   def withdrawn? = status == "withdrawn"
 
-  def shares_offered_dollars
-    shares_offered_cents.to_f / 100 if shares_offered_cents
+  def heat_label
+    HEAT_LEVELS.key(heat)&.to_s&.capitalize || "Cold"
   end
 
-  def ask_price_dollars
-    ask_price_cents.to_f / 100 if ask_price_cents
+  def cold? = heat == 0
+  def warm? = heat == 1
+  def hot? = heat == 2
+  def fire? = heat == 3
+
+  # Underlying company comes from the deal
+  def underlying_company
+    deal&.company
   end
 
-  def min_price_dollars
-    min_price_cents.to_f / 100 if min_price_cents
+  # Get contacts from the seller organization
+  def seller_contacts
+    return [] unless seller
+    seller.people.includes(:employments).where(employments: { is_current: true })
   end
 
-  def total_value_at_ask
-    return nil unless shares_offered && ask_price_cents
-    (shares_offered * ask_price_cents).to_f / 100
+  def allocation_dollars
+    total_cents.to_f / 100 if total_cents
   end
 
-  def total_value_at_min
-    return nil unless shares_offered && min_price_cents
-    (shares_offered * min_price_cents).to_f / 100
+  def price_per_share_dollars
+    price_cents.to_f / 100 if price_cents
+  end
+
+  def min_size_dollars
+    min_size_cents.to_f / 100 if min_size_cents
   end
 end

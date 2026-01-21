@@ -1,0 +1,19 @@
+# Local disk storage for development
+local:
+  service: Disk
+  root: <%= Rails.root.join("storage") %>
+
+# AWS S3 Storage Configuration
+#
+# Set these environment variables:
+#   AWS_ACCESS_KEY_ID     - Your AWS access key
+#   AWS_SECRET_ACCESS_KEY - Your AWS secret key
+#   AWS_REGION            - e.g., "us-east-1"
+#   AWS_BUCKET            - Your S3 bucket name
+
+amazon:
+  service: S3
+  access_key_id: <%= ENV['AWS_ACCESS_KEY_ID'] %>
+  secret_access_key: <%= ENV['AWS_SECRET_ACCESS_KEY'] %>
+  region: <%= ENV.fetch('AWS_REGION', 'us-east-1') %>
+  bucket: <%= ENV['AWS_BUCKET'] %>

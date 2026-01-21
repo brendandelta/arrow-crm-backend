@@ -10,9 +10,100 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_20_000008) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "active_storage_attachments", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "record_type", null: false
+    t.bigint "record_id", null: false
+    t.bigint "blob_id", null: false
+    t.datetime "created_at", null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
+    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
+  end
+
+  create_table "active_storage_blobs", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "filename", null: false
+    t.string "content_type"
+    t.text "metadata"
+    t.string "service_name", null: false
+    t.bigint "byte_size", null: false
+    t.string "checksum"
+    t.datetime "created_at", null: false
+    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
+  end
+
+  create_table "active_storage_variant_records", force: :cascade do |t|
+    t.bigint "blob_id", null: false
+    t.string "variation_digest", null: false
+    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "activities", force: :cascade do |t|
+    t.string "kind", null: false
+    t.string "subject"
+    t.text "body"
+    t.string "direction"
+    t.string "outcome"
+    t.datetime "occurred_at", null: false
+    t.integer "duration_minutes"
+    t.string "regarding_type", null: false
+    t.bigint "regarding_id", null: false
+    t.bigint "deal_target_id"
+    t.bigint "deal_id"
+    t.bigint "performed_by_id"
+    t.jsonb "metadata", default: {}
+    t.boolean "is_task", default: false
+    t.boolean "task_completed", default: false
+    t.datetime "task_due_at"
+    t.bigint "assigned_to_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.datetime "starts_at"
+    t.datetime "ends_at"
+    t.string "location"
+    t.string "location_type"
+    t.string "meeting_url"
+    t.string "timezone"
+    t.boolean "all_day", default: false
+    t.string "calendar_id"
+    t.string "calendar_provider"
+    t.string "calendar_url"
+    t.datetime "synced_at"
+    t.index ["assigned_to_id"], name: "index_activities_on_assigned_to_id"
+    t.index ["calendar_id"], name: "index_activities_on_calendar_id"
+    t.index ["deal_id"], name: "index_activities_on_deal_id"
+    t.index ["deal_target_id"], name: "index_activities_on_deal_target_id"
+    t.index ["is_task", "task_completed"], name: "idx_activities_open_tasks"
+    t.index ["is_task"], name: "index_activities_on_is_task"
+    t.index ["kind"], name: "index_activities_on_kind"
+    t.index ["occurred_at"], name: "index_activities_on_occurred_at"
+    t.index ["performed_by_id"], name: "index_activities_on_performed_by_id"
+    t.index ["regarding_type", "regarding_id"], name: "idx_activities_regarding"
+    t.index ["starts_at", "ends_at"], name: "idx_activities_calendar_range"
+    t.index ["starts_at"], name: "index_activities_on_starts_at"
+  end
+
+  create_table "activity_attendees", force: :cascade do |t|
+    t.bigint "activity_id", null: false
+    t.string "attendee_type", null: false
+    t.bigint "attendee_id"
+    t.string "email"
+    t.string "name"
+    t.string "role", default: "attendee"
+    t.string "response_status"
+    t.boolean "is_organizer", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["activity_id", "attendee_type", "attendee_id"], name: "idx_activity_attendees_unique", unique: true, where: "(attendee_id IS NOT NULL)"
+    t.index ["activity_id", "email"], name: "idx_activity_attendees_email", unique: true, where: "(email IS NOT NULL)"
+    t.index ["activity_id"], name: "index_activity_attendees_on_activity_id"
+    t.index ["attendee_type"], name: "index_activity_attendees_on_attendee_type"
+    t.index ["email"], name: "index_activity_attendees_on_email"
+  end
 
   create_table "blocks", force: :cascade do |t|
     t.bigint "deal_id", null: false
@@ -43,13 +134,42 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
     t.text "internal_notes"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "heat", default: 0
+    t.text "terms"
     t.index ["broker_contact_id"], name: "index_blocks_on_broker_contact_id"
     t.index ["broker_id"], name: "index_blocks_on_broker_id"
     t.index ["contact_id"], name: "index_blocks_on_contact_id"
     t.index ["deal_id"], name: "index_blocks_on_deal_id"
+    t.index ["heat"], name: "index_blocks_on_heat"
     t.index ["seller_id"], name: "index_blocks_on_seller_id"
     t.index ["source"], name: "index_blocks_on_source"
     t.index ["status"], name: "index_blocks_on_status"
+  end
+
+  create_table "deal_targets", force: :cascade do |t|
+    t.bigint "deal_id", null: false
+    t.string "target_type", null: false
+    t.bigint "target_id", null: false
+    t.string "status", default: "not_started", null: false
+    t.string "role"
+    t.integer "priority", default: 2
+    t.datetime "first_contacted_at"
+    t.datetime "last_contacted_at"
+    t.datetime "last_activity_at"
+    t.integer "activity_count", default: 0
+    t.string "next_step"
+    t.datetime "next_step_at"
+    t.text "notes"
+    t.bigint "owner_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["deal_id", "target_type", "target_id"], name: "idx_deal_targets_unique", unique: true
+    t.index ["deal_id"], name: "index_deal_targets_on_deal_id"
+    t.index ["last_activity_at"], name: "index_deal_targets_on_last_activity_at"
+    t.index ["owner_id"], name: "index_deal_targets_on_owner_id"
+    t.index ["priority"], name: "index_deal_targets_on_priority"
+    t.index ["status"], name: "index_deal_targets_on_status"
+    t.index ["target_type", "target_id"], name: "idx_deal_targets_target"
   end
 
   create_table "deals", force: :cascade do |t|
@@ -90,8 +210,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
     t.text "internal_notes"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "deal_owner", default: "arrow"
     t.index ["broker_id"], name: "index_deals_on_broker_id"
     t.index ["company_id"], name: "index_deals_on_company_id"
+    t.index ["deal_owner"], name: "index_deals_on_deal_owner"
     t.index ["expected_close"], name: "index_deals_on_expected_close"
     t.index ["owner_id"], name: "index_deals_on_owner_id"
     t.index ["priority"], name: "index_deals_on_priority"
@@ -314,8 +436,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
     t.string "postal_code"
     t.string "country"
     t.string "timezone"
-    t.string "title"
-    t.string "department"
     t.string "linkedin_url"
     t.string "twitter_url"
     t.text "bio"
@@ -334,12 +454,61 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
     t.integer "contact_count", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "instagram_url"
     t.index "lower((last_name)::text), lower((first_name)::text)", name: "index_people_on_name_lower"
     t.index ["country", "state", "city"], name: "index_people_on_country_and_state_and_city"
     t.index ["last_contacted_at"], name: "index_people_on_last_contacted_at"
     t.index ["owner_id"], name: "index_people_on_owner_id"
     t.index ["tags"], name: "index_people_on_tags", using: :gin
     t.index ["warmth"], name: "index_people_on_warmth"
+  end
+
+  create_table "relationship_types", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "slug", null: false
+    t.string "source_type"
+    t.string "target_type"
+    t.string "category"
+    t.boolean "bidirectional", default: false
+    t.string "inverse_name"
+    t.string "inverse_slug"
+    t.text "description"
+    t.string "color"
+    t.string "icon"
+    t.boolean "is_system", default: true
+    t.boolean "is_active", default: true
+    t.integer "sort_order", default: 0
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_relationship_types_on_category"
+    t.index ["is_active"], name: "index_relationship_types_on_is_active"
+    t.index ["slug"], name: "index_relationship_types_on_slug", unique: true
+    t.index ["source_type", "target_type"], name: "index_relationship_types_on_source_type_and_target_type"
+  end
+
+  create_table "relationships", force: :cascade do |t|
+    t.string "source_type", null: false
+    t.bigint "source_id", null: false
+    t.string "target_type", null: false
+    t.bigint "target_id", null: false
+    t.bigint "relationship_type_id", null: false
+    t.integer "strength"
+    t.string "status", default: "active"
+    t.date "started_at"
+    t.date "ended_at"
+    t.text "notes"
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_relationships_on_created_by_id"
+    t.index ["relationship_type_id"], name: "index_relationships_on_relationship_type_id"
+    t.index ["source_type", "source_id", "target_type", "target_id", "relationship_type_id"], name: "idx_relationships_unique", unique: true
+    t.index ["source_type", "source_id", "target_type", "target_id"], name: "idx_relationships_source_target"
+    t.index ["source_type", "source_id"], name: "index_relationships_on_source_type_and_source_id"
+    t.index ["status"], name: "index_relationships_on_status"
+    t.index ["strength"], name: "index_relationships_on_strength"
+    t.index ["target_type", "target_id"], name: "index_relationships_on_target_type_and_target_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -359,11 +528,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
     t.index ["is_active"], name: "index_users_on_is_active"
   end
 
+  add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "activities", "deal_targets"
+  add_foreign_key "activities", "deals"
+  add_foreign_key "activities", "users", column: "assigned_to_id"
+  add_foreign_key "activities", "users", column: "performed_by_id"
+  add_foreign_key "activity_attendees", "activities"
   add_foreign_key "blocks", "deals"
   add_foreign_key "blocks", "organizations", column: "broker_id"
   add_foreign_key "blocks", "organizations", column: "seller_id"
   add_foreign_key "blocks", "people", column: "broker_contact_id"
   add_foreign_key "blocks", "people", column: "contact_id"
+  add_foreign_key "deal_targets", "deals"
+  add_foreign_key "deal_targets", "users", column: "owner_id"
   add_foreign_key "deals", "organizations", column: "broker_id"
   add_foreign_key "deals", "organizations", column: "company_id"
   add_foreign_key "deals", "people", column: "referred_by_id"
@@ -385,4 +563,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_19_163037) do
   add_foreign_key "organizations", "organizations", column: "parent_org_id"
   add_foreign_key "organizations", "users", column: "owner_id"
   add_foreign_key "people", "users", column: "owner_id"
+  add_foreign_key "relationships", "relationship_types"
+  add_foreign_key "relationships", "users", column: "created_by_id"
 end
