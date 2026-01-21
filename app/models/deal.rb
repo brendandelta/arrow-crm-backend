@@ -247,7 +247,7 @@ class Deal < ApplicationRecord
       total: tasks.count,
       completed: tasks.completed_tasks.count,
       overdue: tasks.overdue_tasks.count,
-      due_this_week: tasks.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
+      dueThisWeek: tasks.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
     }
   end
 
@@ -256,7 +256,7 @@ class Deal < ApplicationRecord
     {
       prospecting: interests.prospecting.count,
       contacted: interests.contacted.count,
-      soft_circled: interests.soft_circled.count,
+      softCircled: interests.soft_circled.count,
       committed: interests.committed.count,
       allocated: interests.allocated.count,
       funded: interests.funded.count,

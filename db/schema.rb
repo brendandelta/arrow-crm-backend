@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_20_000008) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -103,6 +103,21 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_20_000008) do
     t.index ["activity_id"], name: "index_activity_attendees_on_activity_id"
     t.index ["attendee_type"], name: "index_activity_attendees_on_attendee_type"
     t.index ["email"], name: "index_activity_attendees_on_email"
+  end
+
+  create_table "advantages", force: :cascade do |t|
+    t.bigint "deal_id", null: false
+    t.string "kind", null: false
+    t.string "title", null: false
+    t.text "description"
+    t.integer "confidence"
+    t.string "timeliness"
+    t.string "source"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["deal_id"], name: "index_advantages_on_deal_id"
+    t.index ["kind"], name: "index_advantages_on_kind"
+    t.index ["timeliness"], name: "index_advantages_on_timeliness"
   end
 
   create_table "blocks", force: :cascade do |t|
@@ -211,6 +226,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_20_000008) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "deal_owner", default: "arrow"
+    t.jsonb "risk_flags", default: {}
     t.index ["broker_id"], name: "index_deals_on_broker_id"
     t.index ["company_id"], name: "index_deals_on_company_id"
     t.index ["deal_owner"], name: "index_deals_on_deal_owner"
@@ -535,6 +551,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_20_000008) do
   add_foreign_key "activities", "users", column: "assigned_to_id"
   add_foreign_key "activities", "users", column: "performed_by_id"
   add_foreign_key "activity_attendees", "activities"
+  add_foreign_key "advantages", "deals"
   add_foreign_key "blocks", "deals"
   add_foreign_key "blocks", "organizations", column: "broker_id"
   add_foreign_key "blocks", "organizations", column: "seller_id"
