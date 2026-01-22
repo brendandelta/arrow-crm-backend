@@ -62,8 +62,17 @@ Rails.application.routes.draw do
       collection do
         get :my_tasks          # GET /api/tasks/my_tasks?user_id=X
         get :grouped           # GET /api/tasks/grouped?deal_id=X
+        get :grouped_by_deal   # GET /api/tasks/grouped_by_deal
+        get :grouped_by_project # GET /api/tasks/grouped_by_project
+        get :stats             # GET /api/tasks/stats
       end
     end
+
+    # Projects (non-deal initiatives)
+    resources :projects, only: [:index, :show, :create, :update, :destroy]
+
+    # Users (for assignee dropdowns)
+    resources :users, only: [:index, :show]
   end
 
   # Rails health check for load balancers

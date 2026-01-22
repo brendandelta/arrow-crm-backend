@@ -479,6 +479,21 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.index ["warmth"], name: "index_people_on_warmth"
   end
 
+  create_table "projects", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "description"
+    t.string "status", default: "active"
+    t.bigint "owner_id"
+    t.bigint "created_by_id"
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_projects_on_created_by_id"
+    t.index ["name"], name: "index_projects_on_name"
+    t.index ["owner_id"], name: "index_projects_on_owner_id"
+    t.index ["status"], name: "index_projects_on_status"
+  end
+
   create_table "relationship_types", force: :cascade do |t|
     t.string "name", null: false
     t.string "slug", null: false
@@ -544,6 +559,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.jsonb "metadata", default: {}
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "project_id"
     t.index ["assigned_to_id", "completed"], name: "idx_tasks_assigned_open"
     t.index ["assigned_to_id"], name: "index_tasks_on_assigned_to_id"
     t.index ["completed", "due_at"], name: "idx_tasks_open_due"
@@ -555,6 +571,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.index ["parent_task_id"], name: "index_tasks_on_parent_task_id"
     t.index ["person_id"], name: "index_tasks_on_person_id"
     t.index ["priority"], name: "index_tasks_on_priority"
+    t.index ["project_id"], name: "index_tasks_on_project_id"
     t.index ["status"], name: "index_tasks_on_status"
   end
 
@@ -611,11 +628,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
   add_foreign_key "organizations", "organizations", column: "parent_org_id"
   add_foreign_key "organizations", "users", column: "owner_id"
   add_foreign_key "people", "users", column: "owner_id"
+  add_foreign_key "projects", "users", column: "created_by_id"
+  add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "relationships", "relationship_types"
   add_foreign_key "relationships", "users", column: "created_by_id"
   add_foreign_key "tasks", "deals"
   add_foreign_key "tasks", "organizations"
   add_foreign_key "tasks", "people"
+  add_foreign_key "tasks", "projects"
   add_foreign_key "tasks", "tasks", column: "parent_task_id"
   add_foreign_key "tasks", "users", column: "assigned_to_id"
   add_foreign_key "tasks", "users", column: "created_by_id"

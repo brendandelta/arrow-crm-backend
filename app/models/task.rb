@@ -8,13 +8,14 @@ class Task < ApplicationRecord
 
   # Linkable entities - tasks can be associated with any of these
   belongs_to :deal, optional: true
+  belongs_to :project, optional: true
   belongs_to :organization, optional: true
   belongs_to :person, optional: true
 
   # Validations
   validates :subject, presence: true
 
-  STATUSES = %w[open in_progress blocked done].freeze
+  STATUSES = %w[open in_progress blocked waiting done].freeze
   validates :status, inclusion: { in: STATUSES }
 
   PRIORITIES = { low: 1, medium: 2, high: 3, urgent: 4 }.freeze
@@ -35,8 +36,18 @@ class Task < ApplicationRecord
   scope :created_by_user, ->(user) { where(created_by: user) }
 
   scope :for_deal, ->(deal_id) { where(deal_id: deal_id) }
+  scope :for_project, ->(project_id) { where(project_id: project_id) }
   scope :for_organization, ->(org_id) { where(organization_id: org_id) }
   scope :for_person, ->(person_id) { where(person_id: person_id) }
+
+  # Attachment type scopes
+  scope :deal_tasks, -> { where.not(deal_id: nil) }
+  scope :project_tasks, -> { where.not(project_id: nil) }
+  scope :general_tasks, -> { where(deal_id: nil, project_id: nil) }
+  scope :unassigned, -> { where(assigned_to_id: nil) }
+
+  # Due date scopes for filtering
+  scope :due_soon, -> { where(due_at: Time.current..7.days.from_now) }
 
   scope :by_priority, -> { order(priority: :desc, due_at: :asc) }
   scope :by_due_date, -> { order(Arel.sql("CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC")) }
@@ -56,6 +67,7 @@ class Task < ApplicationRecord
   def open? = status == "open"
   def in_progress? = status == "in_progress"
   def blocked? = status == "blocked"
+  def waiting? = status == "waiting"
   def done? = status == "done"
 
   # Due date helpers
@@ -106,13 +118,29 @@ class Task < ApplicationRecord
     completed? ? uncomplete! : complete!
   end
 
-  # Get the linked entity (deal, organization, or person)
+  # Get the primary attachment (deal or project)
+  def primary_attachment
+    deal || project
+  end
+
+  def attachment_type
+    return "deal" if deal_id.present?
+    return "project" if project_id.present?
+    "general"
+  end
+
+  def attachment_name
+    primary_attachment&.name
+  end
+
+  # Get the linked entity (deal, project, organization, or person)
   def linked_entity
-    deal || organization || person
+    deal || project || organization || person
   end
 
   def linked_entity_type
     return "Deal" if deal_id.present?
+    return "Project" if project_id.present?
     return "Organization" if organization_id.present?
     return "Person" if person_id.present?
     nil
@@ -120,6 +148,19 @@ class Task < ApplicationRecord
 
   def linked_entity_name
     linked_entity&.name || linked_entity&.try(:full_name)
+  end
+
+  # Check attachment mode
+  def deal_task?
+    deal_id.present?
+  end
+
+  def project_task?
+    project_id.present?
+  end
+
+  def general_task?
+    deal_id.nil? && project_id.nil?
   end
 
   # Callbacks
