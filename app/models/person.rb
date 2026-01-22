@@ -7,6 +7,7 @@ class Person < ApplicationRecord
   has_many :deal_targets, as: :target, dependent: :destroy
   has_many :activities, as: :regarding, dependent: :destroy
   has_many :targeted_deals, through: :deal_targets, source: :deal
+  has_many :tasks, dependent: :destroy
 
   # Avatar image attachment (stored on AWS S3)
   # This single line gives us: person.avatar, person.avatar.attach(), person.avatar.attached?, etc.

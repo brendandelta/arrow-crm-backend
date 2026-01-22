@@ -1,10 +1,10 @@
 class Api::DealsController < ApplicationController
   def index
-    deals = Deal.includes(:company, :owner, :blocks, :interests, :deal_targets, :activities, :documents).order(created_at: :desc)
+    deals = Deal.includes(:company, :owner, :blocks, :interests, :deal_targets, :activities, :documents, :tasks).order(created_at: :desc)
 
     render json: deals.map { |deal|
-      overdue_tasks = deal.activities.overdue_tasks.count
-      due_this_week = deal.activities.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
+      overdue_tasks = deal.tasks.overdue.count
+      due_this_week = deal.tasks.open_tasks.due_this_week.count
       risk_flags = deal.risk_flags.present? ? deal.risk_flags : deal.compute_risk_flags
 
       {
@@ -64,7 +64,7 @@ class Api::DealsController < ApplicationController
   end
 
   def stats
-    deals = Deal.includes(:interests, :blocks, :activities)
+    deals = Deal.includes(:interests, :blocks, :tasks)
 
     live_deals = deals.by_status("live")
     at_risk = deals.active.select { |d| d.compute_risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "danger" } }
@@ -78,7 +78,7 @@ class Api::DealsController < ApplicationController
       totalWired: live_deals.sum(&:wired_cents),
       totalInventory: live_deals.sum(&:inventory_cents),
       atRiskCount: at_risk.count,
-      overdueTasksCount: Activity.open_tasks.overdue_tasks.joins(:deal).where(deals: { status: %w[sourcing live closing] }).count,
+      overdueTasksCount: Task.open_tasks.overdue.joins(:deal).where(deals: { status: %w[sourcing live closing] }).count,
       byStatus: {
         sourcing: deals.by_status("sourcing").count,
         live: deals.by_status("live").count,
@@ -98,7 +98,8 @@ class Api::DealsController < ApplicationController
       blocks: [:seller, :contact, :broker, :broker_contact, :interests],
       interests: [:investor, :contact, :decision_maker, :allocated_block],
       deal_targets: [:target, :owner, :activities],
-      activities: [:performed_by, :assigned_to]
+      activities: [:performed_by, :assigned_to],
+      tasks: [:assigned_to, :created_by, :parent_task, :subtasks]
     ).find(params[:id])
 
     best_block = deal.best_price_block
@@ -240,12 +241,12 @@ class Api::DealsController < ApplicationController
       # All activities for feed
       activities: deal.activities.recent.limit(50).map { |a| activity_json(a) },
 
-      # Tasks grouped by status
+      # Tasks grouped by status (using dedicated tasks table)
       tasks: {
-        overdue: deal.activities.overdue_tasks.order(task_due_at: :asc).map { |a| task_json(a) },
-        dueThisWeek: deal.activities.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).order(task_due_at: :asc).map { |a| task_json(a) },
-        backlog: deal.activities.open_tasks.where("task_due_at > ? OR task_due_at IS NULL", Time.current.end_of_week).order(task_due_at: :asc).limit(20).map { |a| task_json(a) },
-        completed: deal.activities.completed_tasks.order(updated_at: :desc).limit(10).map { |a| task_json(a) }
+        overdue: deal.tasks.overdue.by_due_date.map { |t| task_json(t) },
+        dueThisWeek: deal.tasks.open_tasks.due_this_week.reject(&:overdue?).by_due_date.map { |t| task_json(t) },
+        backlog: deal.tasks.open_tasks.reject { |t| t.overdue? || t.due_this_week? }.map { |t| task_json(t) },
+        completed: deal.tasks.completed_tasks.recent.limit(10).map { |t| task_json(t) }
       },
 
       recentActivities: deal.activities.recent.limit(5).map { |a|
@@ -330,14 +331,31 @@ class Api::DealsController < ApplicationController
       id: task.id,
       subject: task.subject,
       body: task.body,
-      dueAt: task.task_due_at,
-      completed: task.task_completed,
+      dueAt: task.due_at,
+      completed: task.completed,
       overdue: task.overdue?,
+      dueToday: task.due_today?,
+      dueThisWeek: task.due_this_week?,
+      priority: task.priority,
+      priorityLabel: task.priority_label,
+      status: task.status,
+      isSubtask: task.subtask?,
+      parentTaskId: task.parent_task_id,
+      subtaskCount: task.subtask_count,
+      completedSubtaskCount: task.completed_subtask_count,
       assignedTo: task.assigned_to ? {
         id: task.assigned_to.id,
         firstName: task.assigned_to.first_name,
         lastName: task.assigned_to.last_name
       } : nil,
+      createdBy: task.created_by ? {
+        id: task.created_by.id,
+        firstName: task.created_by.first_name,
+        lastName: task.created_by.last_name
+      } : nil,
+      dealId: task.deal_id,
+      organizationId: task.organization_id,
+      personId: task.person_id,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     }

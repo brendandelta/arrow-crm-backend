@@ -6,6 +6,8 @@ class User < ApplicationRecord
   has_many :meetings, foreign_key: :owner_id, dependent: :nullify
   has_many :notes, foreign_key: :author_id, dependent: :nullify
   has_many :documents, foreign_key: :uploaded_by_id, dependent: :nullify
+  has_many :assigned_tasks, class_name: "Task", foreign_key: :assigned_to_id, dependent: :nullify
+  has_many :created_tasks, class_name: "Task", foreign_key: :created_by_id, dependent: :nullify
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, presence: true

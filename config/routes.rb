@@ -48,8 +48,20 @@ Rails.application.routes.draw do
       end
       collection do
         get :timeline          # GET /api/activities/timeline?deal_id=X
-        get :tasks             # GET /api/activities/tasks
+        get :tasks             # GET /api/activities/tasks (legacy - use /api/tasks instead)
         get :calendar          # GET /api/activities/calendar?start=X&end=Y
+      end
+    end
+
+    # Tasks (dedicated task management)
+    resources :tasks, only: [:index, :show, :create, :update, :destroy] do
+      member do
+        post :complete         # POST /api/tasks/:id/complete
+        post :uncomplete       # POST /api/tasks/:id/uncomplete
+      end
+      collection do
+        get :my_tasks          # GET /api/tasks/my_tasks?user_id=X
+        get :grouped           # GET /api/tasks/grouped?deal_id=X
       end
     end
   end

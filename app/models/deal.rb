@@ -9,6 +9,7 @@ class Deal < ApplicationRecord
   has_many :deal_targets, dependent: :destroy
   has_many :activities, dependent: :destroy
   has_many :advantages, dependent: :destroy
+  has_many :tasks, dependent: :destroy
 
   validates :name, presence: true
   validates :status, presence: true
@@ -145,12 +146,9 @@ class Deal < ApplicationRecord
     dates << { date: expected_close, type: "expected_close", label: "Expected Close" } if expected_close
     dates << { date: deadline, type: "deadline", label: "Deadline" } if deadline
 
-    # Get earliest overdue or upcoming task
-    next_task = activities.where(is_task: true, task_completed: false)
-                         .where.not(task_due_at: nil)
-                         .order(task_due_at: :asc)
-                         .first
-    dates << { date: next_task.task_due_at.to_date, type: "task", label: next_task.subject || "Task due" } if next_task
+    # Get earliest overdue or upcoming task from new tasks table
+    next_task = tasks.open_tasks.where.not(due_at: nil).order(due_at: :asc).first
+    dates << { date: next_task.due_at.to_date, type: "task", label: next_task.subject || "Task due" } if next_task
 
     dates.min_by { |d| d[:date] }
   end
@@ -221,8 +219,8 @@ class Deal < ApplicationRecord
       }
     end
 
-    # Overdue tasks
-    overdue_count = activities.overdue_tasks.count
+    # Overdue tasks (from new tasks table)
+    overdue_count = tasks.overdue.count
     if overdue_count > 0
       flags[:overdue_tasks] = {
         active: true,
@@ -240,14 +238,13 @@ class Deal < ApplicationRecord
     update!(risk_flags: compute_risk_flags)
   end
 
-  # Tasks summary
+  # Tasks summary (using new tasks table)
   def tasks_summary
-    tasks = activities.where(is_task: true)
     {
       total: tasks.count,
       completed: tasks.completed_tasks.count,
-      overdue: tasks.overdue_tasks.count,
-      dueThisWeek: tasks.open_tasks.where(task_due_at: Time.current..Time.current.end_of_week).count
+      overdue: tasks.overdue.count,
+      dueThisWeek: tasks.open_tasks.due_this_week.count
     }
   end
 
