@@ -244,8 +244,8 @@ class Api::DealsController < ApplicationController
       # Tasks grouped by status (using dedicated tasks table)
       tasks: {
         overdue: deal.tasks.overdue.by_due_date.map { |t| task_json(t) },
-        dueThisWeek: deal.tasks.open_tasks.due_this_week.reject(&:overdue?).by_due_date.map { |t| task_json(t) },
-        backlog: deal.tasks.open_tasks.reject { |t| t.overdue? || t.due_this_week? }.map { |t| task_json(t) },
+        dueThisWeek: deal.tasks.open_tasks.due_this_week.by_due_date.reject(&:overdue?).map { |t| task_json(t) },
+        backlog: deal.tasks.open_tasks.by_due_date.reject { |t| t.overdue? || t.due_this_week? }.map { |t| task_json(t) },
         completed: deal.tasks.completed_tasks.recent.limit(10).map { |t| task_json(t) }
       },
 
