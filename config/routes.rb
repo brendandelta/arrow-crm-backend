@@ -7,6 +7,7 @@ Rails.application.routes.draw do
     resources :deals, only: [:index, :show, :create, :update] do
       collection do
         get :stats             # GET /api/deals/stats
+        get :mind_map          # GET /api/deals/mind_map
       end
       # Nested routes for deal targets
       resources :targets, controller: "deal_targets", only: [:index, :create]

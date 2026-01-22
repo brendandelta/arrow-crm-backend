@@ -264,6 +264,24 @@ class Api::DealsController < ApplicationController
     }
   end
 
+  def mind_map
+    deals = Deal.where.not(status: "dead")
+                .includes(:company, :owner, :blocks, :interests, :deal_targets, :tasks)
+                .order(priority: :desc, created_at: :desc)
+
+    groups = %w[arrow liberator].map do |owner_type|
+      owner_deals = deals.select { |d| d.deal_owner == owner_type }
+
+      {
+        owner: owner_type,
+        label: owner_type == "arrow" ? "Arrow Deals" : "Liberator Deals",
+        deals: owner_deals.map { |deal| mind_map_deal_json(deal) }
+      }
+    end
+
+    render json: { groups: groups }
+  end
+
   def create
     deal = Deal.new(deal_params)
 
@@ -285,6 +303,130 @@ class Api::DealsController < ApplicationController
   end
 
   private
+
+  def mind_map_deal_json(deal)
+    risk_flags = deal.risk_flags.present? ? deal.risk_flags : deal.compute_risk_flags
+    risk_level = if risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "danger" }
+                   "danger"
+                 elsif risk_flags.values.any? { |f| f.is_a?(Hash) && f[:severity] == "warning" }
+                   "warning"
+                 else
+                   "ok"
+                 end
+
+    top_blocks = deal.blocks.sort_by { |b| -(b.heat || 0) }.first(5)
+    top_interests = deal.interests.sort_by { |i| -(i.committed_cents || 0) }.first(5)
+    top_targets = deal.deal_targets.active.sort_by { |t| t.priority || 99 }.first(5)
+
+    {
+      id: deal.id,
+      name: deal.name,
+      company: deal.company&.name,
+      status: deal.status,
+      priority: deal.priority,
+      owner: deal.owner ? {
+        id: deal.owner.id,
+        firstName: deal.owner.first_name,
+        lastName: deal.owner.last_name
+      } : nil,
+      riskLevel: risk_level,
+      coverageRatio: deal.coverage_ratio,
+      nextAction: compute_next_action(deal),
+      blocks: top_blocks.map { |b|
+        {
+          id: b.id,
+          name: b.seller&.name || "Block ##{b.id}",
+          type: "block",
+          status: b.status,
+          sizeCents: b.total_cents,
+          priceCents: b.price_cents,
+          constraints: b.constraints,
+          nextAction: compute_next_action_for_block(deal, b)
+        }
+      },
+      interests: top_interests.map { |i|
+        {
+          id: i.id,
+          name: i.investor&.name || "Interest ##{i.id}",
+          type: "interest",
+          status: i.status,
+          committedCents: i.committed_cents,
+          blockName: i.allocated_block&.seller&.name,
+          nextAction: compute_next_action_for_interest(deal, i)
+        }
+      },
+      targets: top_targets.map { |t|
+        {
+          id: t.id,
+          name: t.target_name,
+          type: "target",
+          status: t.status,
+          lastActivityAt: t.last_activity_at,
+          isStale: t.last_activity_at.nil? || t.last_activity_at < 7.days.ago,
+          nextAction: compute_next_action_for_target(deal, t)
+        }
+      }
+    }
+  end
+
+  def compute_next_action(deal)
+    # Check for overdue tasks on the deal
+    overdue_task = deal.tasks.overdue.by_due_date.first
+    if overdue_task
+      return { label: "#{overdue_task.subject} (overdue)", dueAt: overdue_task.due_at, isOverdue: true, kind: "task" }
+    end
+
+    # Check for nearest due task
+    next_task = deal.tasks.open_tasks.where.not(due_at: nil).order(due_at: :asc).first
+    if next_task
+      return { label: next_task.subject, dueAt: next_task.due_at, isOverdue: false, kind: "task" }
+    end
+
+    # Check for nearest next_step_at from deal_targets
+    next_target = deal.deal_targets.active.where.not(next_step_at: nil).order(next_step_at: :asc).first
+    if next_target
+      return { label: next_target.next_step || "Follow up", dueAt: next_target.next_step_at, isOverdue: next_target.next_step_at < Date.current, kind: "target" }
+    end
+
+    { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
+  end
+
+  def compute_next_action_for_block(deal, block)
+    # Tasks linked to this deal that mention the block
+    overdue_task = deal.tasks.overdue.by_due_date.first
+    if overdue_task
+      return { label: "#{overdue_task.subject} (overdue)", dueAt: overdue_task.due_at, isOverdue: true, kind: "task" }
+    end
+
+    next_task = deal.tasks.open_tasks.where.not(due_at: nil).order(due_at: :asc).first
+    if next_task
+      return { label: next_task.subject, dueAt: next_task.due_at, isOverdue: false, kind: "task" }
+    end
+
+    { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
+  end
+
+  def compute_next_action_for_interest(deal, interest)
+    if interest.next_step_at.present?
+      is_overdue = interest.next_step_at < Date.current
+      label = interest.next_step || "Follow up"
+      label = "#{label} (overdue)" if is_overdue
+      return { label: label, dueAt: interest.next_step_at, isOverdue: is_overdue, kind: "interest" }
+    end
+
+    { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
+  end
+
+  def compute_next_action_for_target(deal, target)
+    if target.next_step_at.present?
+      is_overdue = target.next_step_at < Date.current
+      label = target.next_step || "Follow up"
+      label = "#{label} (overdue)" if is_overdue
+      return { label: label, dueAt: target.next_step_at, isOverdue: is_overdue, kind: "target" }
+    end
+
+    { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
+  end
 
   def deal_params
     params.permit(
@@ -405,6 +547,10 @@ class Api::DealsController < ApplicationController
       sourceDetail: block.source_detail,
       verified: block.verified,
       internalNotes: block.internal_notes,
+      rofr: block.rofr,
+      transferApprovalRequired: block.transfer_approval_required,
+      issuerApprovalRequired: block.issuer_approval_required,
+      constraints: block.constraints,
       createdAt: block.created_at
     }
 

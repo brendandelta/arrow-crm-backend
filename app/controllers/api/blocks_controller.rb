@@ -50,7 +50,8 @@ class Api::BlocksController < ApplicationController
       :broker_id, :broker_contact_id, :broker_fee_bps,
       :exclusivity, :exclusivity_until,
       :verified, :verified_at, :verification_notes, :internal_notes,
-      :heat, :terms
+      :heat, :terms,
+      :rofr, :transfer_approval_required, :issuer_approval_required
     )
   end
 
@@ -109,6 +110,10 @@ class Api::BlocksController < ApplicationController
       exclusivityUntil: block.exclusivity_until,
       verified: block.verified,
       verifiedAt: block.verified_at,
+      rofr: block.rofr,
+      transferApprovalRequired: block.transfer_approval_required,
+      issuerApprovalRequired: block.issuer_approval_required,
+      constraints: block.constraints,
       createdAt: block.created_at,
       updatedAt: block.updated_at
     }

@@ -59,4 +59,12 @@ class Block < ApplicationRecord
   def min_size_dollars
     min_size_cents.to_f / 100 if min_size_cents
   end
+
+  def constraints
+    list = []
+    list << "ROFR" if rofr?
+    list << "Transfer Approval" if transfer_approval_required?
+    list << "Issuer Approval" if issuer_approval_required?
+    list
+  end
 end
