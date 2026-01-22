@@ -527,6 +527,37 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.index ["target_type", "target_id"], name: "index_relationships_on_target_type_and_target_id"
   end
 
+  create_table "tasks", force: :cascade do |t|
+    t.string "subject", null: false
+    t.text "body"
+    t.datetime "due_at"
+    t.boolean "completed", default: false, null: false
+    t.datetime "completed_at"
+    t.integer "priority", default: 2
+    t.string "status", default: "open"
+    t.bigint "parent_task_id"
+    t.bigint "assigned_to_id"
+    t.bigint "created_by_id"
+    t.bigint "deal_id"
+    t.bigint "organization_id"
+    t.bigint "person_id"
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assigned_to_id", "completed"], name: "idx_tasks_assigned_open"
+    t.index ["assigned_to_id"], name: "index_tasks_on_assigned_to_id"
+    t.index ["completed", "due_at"], name: "idx_tasks_open_due"
+    t.index ["completed"], name: "index_tasks_on_completed"
+    t.index ["created_by_id"], name: "index_tasks_on_created_by_id"
+    t.index ["deal_id"], name: "index_tasks_on_deal_id"
+    t.index ["due_at"], name: "index_tasks_on_due_at"
+    t.index ["organization_id"], name: "index_tasks_on_organization_id"
+    t.index ["parent_task_id"], name: "index_tasks_on_parent_task_id"
+    t.index ["person_id"], name: "index_tasks_on_person_id"
+    t.index ["priority"], name: "index_tasks_on_priority"
+    t.index ["status"], name: "index_tasks_on_status"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", null: false
     t.string "first_name", null: false
@@ -582,4 +613,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
   add_foreign_key "people", "users", column: "owner_id"
   add_foreign_key "relationships", "relationship_types"
   add_foreign_key "relationships", "users", column: "created_by_id"
+  add_foreign_key "tasks", "deals"
+  add_foreign_key "tasks", "organizations"
+  add_foreign_key "tasks", "people"
+  add_foreign_key "tasks", "tasks", column: "parent_task_id"
+  add_foreign_key "tasks", "users", column: "assigned_to_id"
+  add_foreign_key "tasks", "users", column: "created_by_id"
 end
