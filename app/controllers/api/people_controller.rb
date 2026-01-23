@@ -2,6 +2,11 @@ class Api::PeopleController < ApplicationController
   def index
     people = Person.includes(employments: :organization).order(:last_name, :first_name)
 
+    if params[:q].present?
+      q = "%#{params[:q]}%"
+      people = people.where("first_name ILIKE ? OR last_name ILIKE ? OR (first_name || ' ' || last_name) ILIKE ?", q, q, q)
+    end
+
     render json: people.map { |person|
       current = person.current_employment
       {

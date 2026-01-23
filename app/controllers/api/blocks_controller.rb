@@ -2,7 +2,7 @@ class Api::BlocksController < ApplicationController
   before_action :set_block, only: [:show, :update, :destroy]
 
   def index
-    blocks = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, deal: :company)
+    blocks = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, block_contacts: :person, deal: :company)
                   .order(created_at: :desc)
 
     render json: blocks.map { |block| block_json(block) }
@@ -16,6 +16,7 @@ class Api::BlocksController < ApplicationController
     block = Block.new(block_params)
 
     if block.save
+      sync_block_contacts(block) if params[:block_contacts].present?
       render json: { id: block.id, success: true }, status: :created
     else
       render json: { errors: block.errors.full_messages }, status: :unprocessable_entity
@@ -24,6 +25,8 @@ class Api::BlocksController < ApplicationController
 
   def update
     if @block.update(block_params)
+      sync_block_contacts(@block) if params.key?(:block_contacts)
+      @block.reload
       render json: block_json(@block, full: true)
     else
       render json: { errors: @block.errors.full_messages }, status: :unprocessable_entity
@@ -38,7 +41,7 @@ class Api::BlocksController < ApplicationController
   private
 
   def set_block
-    @block = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, deal: :company).find(params[:id])
+    @block = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, block_contacts: :person, deal: :company).find(params[:id])
   end
 
   def block_params
@@ -88,6 +91,16 @@ class Api::BlocksController < ApplicationController
         lastName: next_task.assigned_to.last_name
       } : nil
     }
+  end
+
+  def sync_block_contacts(block)
+    incoming = (params[:block_contacts] || []).map { |bc| bc.permit(:person_id, :role, :notes).to_h }
+
+    # Replace all block_contacts with the incoming set
+    block.block_contacts.destroy_all
+    incoming.each do |attrs|
+      block.block_contacts.create!(attrs)
+    end
   end
 
   def block_json(block, full: false)
@@ -158,15 +171,26 @@ class Api::BlocksController < ApplicationController
     if full
       data[:verificationNotes] = block.verification_notes
       data[:internalNotes] = block.internal_notes
-      data[:sellerContacts] = block.seller_contacts.map do |person|
-        emp = person.employments.find { |e| e.organization_id == block.seller_id && e.is_current }
+      data[:sellerContacts] = block.block_contacts.select { |bc| bc.role == "seller_contact" }.map do |bc|
         {
-          id: person.id,
-          firstName: person.first_name,
-          lastName: person.last_name,
-          title: emp&.title,
-          email: person.primary_email,
-          phone: person.primary_phone
+          id: bc.id,
+          personId: bc.person_id,
+          firstName: bc.person.first_name,
+          lastName: bc.person.last_name,
+          email: bc.person.primary_email,
+          phone: bc.person.primary_phone,
+          notes: bc.notes
+        }
+      end
+      data[:brokerContacts] = block.block_contacts.select { |bc| bc.role == "broker_contact" }.map do |bc|
+        {
+          id: bc.id,
+          personId: bc.person_id,
+          firstName: bc.person.first_name,
+          lastName: bc.person.last_name,
+          email: bc.person.primary_email,
+          phone: bc.person.primary_phone,
+          notes: bc.notes
         }
       end
       data[:interests] = block.interests.includes(:investor, :contact).map do |interest|

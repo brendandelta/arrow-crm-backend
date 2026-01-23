@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_22_000003) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_22_000005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -118,6 +118,18 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_000003) do
     t.index ["deal_id"], name: "index_advantages_on_deal_id"
     t.index ["kind"], name: "index_advantages_on_kind"
     t.index ["timeliness"], name: "index_advantages_on_timeliness"
+  end
+
+  create_table "block_contacts", force: :cascade do |t|
+    t.bigint "block_id", null: false
+    t.bigint "person_id", null: false
+    t.string "role", null: false
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["block_id", "person_id", "role"], name: "index_block_contacts_on_block_id_and_person_id_and_role", unique: true
+    t.index ["block_id"], name: "index_block_contacts_on_block_id"
+    t.index ["person_id"], name: "index_block_contacts_on_person_id"
   end
 
   create_table "blocks", force: :cascade do |t|
@@ -607,6 +619,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_000003) do
   add_foreign_key "activities", "users", column: "performed_by_id"
   add_foreign_key "activity_attendees", "activities"
   add_foreign_key "advantages", "deals"
+  add_foreign_key "block_contacts", "blocks"
+  add_foreign_key "block_contacts", "people"
   add_foreign_key "blocks", "deals"
   add_foreign_key "blocks", "organizations", column: "broker_id"
   add_foreign_key "blocks", "organizations", column: "seller_id"

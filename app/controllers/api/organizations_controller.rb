@@ -2,6 +2,10 @@ class Api::OrganizationsController < ApplicationController
   def index
     organizations = Organization.includes(:employments, :deals).order(:name)
 
+    if params[:q].present?
+      organizations = organizations.where("name ILIKE ?", "%#{params[:q]}%")
+    end
+
     render json: organizations.map { |org|
       {
         id: org.id,
