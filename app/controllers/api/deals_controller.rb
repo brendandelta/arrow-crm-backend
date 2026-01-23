@@ -95,9 +95,9 @@ class Api::DealsController < ApplicationController
       :owner,
       :advantages,
       :documents,
-      blocks: [:seller, :contact, :broker, :broker_contact, :interests, :tasks],
-      interests: [:investor, :contact, :decision_maker, :allocated_block, :tasks],
-      deal_targets: [:target, :owner, :activities, :tasks],
+      blocks: [:seller, :contact, :broker, :broker_contact, :interests, { tasks: :assigned_to }],
+      interests: [:investor, :contact, :decision_maker, :allocated_block, { tasks: :assigned_to }],
+      deal_targets: [:target, :owner, :activities, { tasks: :assigned_to }],
       activities: [:performed_by, :assigned_to],
       tasks: [:assigned_to, :created_by, :parent_task, :subtasks]
     ).find(params[:id])
@@ -549,12 +549,16 @@ class Api::DealsController < ApplicationController
     # Include follow-up tasks
     open_tasks = block.tasks.select { |t| t.completed_at.nil? }.sort_by { |t| t.due_at || Time.new(9999) }
     next_task = open_tasks.first
-    result[:nextTask] = next_task ? {
-      id: next_task.id,
-      subject: next_task.subject,
-      dueAt: next_task.due_at,
-      overdue: next_task.due_at.present? && next_task.due_at < Time.current
-    } : nil
+    result[:nextTask] = if next_task
+      task_data = {
+        id: next_task.id,
+        subject: next_task.subject,
+        dueAt: next_task.due_at,
+        overdue: next_task.due_at.present? && next_task.due_at < Time.current
+      }
+      task_data[:assignedTo] = { id: next_task.assigned_to.id, firstName: next_task.assigned_to.first_name, lastName: next_task.assigned_to.last_name } if next_task.assigned_to
+      task_data
+    end
 
     if include_interests
       result[:mappedInterests] = block.interests.map do |i|
@@ -611,12 +615,16 @@ class Api::DealsController < ApplicationController
     # Include follow-up tasks
     open_tasks = interest.tasks.select { |t| t.completed_at.nil? }.sort_by { |t| t.due_at || Time.new(9999) }
     next_task = open_tasks.first
-    result[:nextTask] = next_task ? {
-      id: next_task.id,
-      subject: next_task.subject,
-      dueAt: next_task.due_at,
-      overdue: next_task.due_at.present? && next_task.due_at < Time.current
-    } : nil
+    result[:nextTask] = if next_task
+      task_data = {
+        id: next_task.id,
+        subject: next_task.subject,
+        dueAt: next_task.due_at,
+        overdue: next_task.due_at.present? && next_task.due_at < Time.current
+      }
+      task_data[:assignedTo] = { id: next_task.assigned_to.id, firstName: next_task.assigned_to.first_name, lastName: next_task.assigned_to.last_name } if next_task.assigned_to
+      task_data
+    end
 
     if include_block && interest.allocated_block
       result[:allocatedBlock] = {
@@ -683,21 +691,27 @@ class Api::DealsController < ApplicationController
     # Include follow-up tasks
     open_tasks = deal_target.tasks.select { |t| t.completed_at.nil? }.sort_by { |t| t.due_at || Time.new(9999) }
     result[:tasks] = open_tasks.map do |t|
-      {
+      task_data = {
         id: t.id,
         subject: t.subject,
         dueAt: t.due_at,
         overdue: t.due_at.present? && t.due_at < Time.current
       }
+      task_data[:assignedTo] = { id: t.assigned_to.id, firstName: t.assigned_to.first_name, lastName: t.assigned_to.last_name } if t.assigned_to
+      task_data
     end
 
     next_task = open_tasks.first
-    result[:nextTask] = next_task ? {
-      id: next_task.id,
-      subject: next_task.subject,
-      dueAt: next_task.due_at,
-      overdue: next_task.due_at.present? && next_task.due_at < Time.current
-    } : nil
+    result[:nextTask] = if next_task
+      task_data = {
+        id: next_task.id,
+        subject: next_task.subject,
+        dueAt: next_task.due_at,
+        overdue: next_task.due_at.present? && next_task.due_at < Time.current
+      }
+      task_data[:assignedTo] = { id: next_task.assigned_to.id, firstName: next_task.assigned_to.first_name, lastName: next_task.assigned_to.last_name } if next_task.assigned_to
+      task_data
+    end
 
     if include_activities
       result[:recentActivities] = deal_target.activities.recent.limit(5).map do |a|
