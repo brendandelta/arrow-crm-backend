@@ -10,7 +10,7 @@ class Api::DealTargetsController < ApplicationController
       DealTarget.all
     end
 
-    deal_targets = deal_targets.includes(:deal, :target, :owner)
+    deal_targets = deal_targets.includes(:deal, :target, :owner, tasks: :assigned_to)
                                .order(priority: :asc, last_activity_at: :desc)
 
     # Optional filters
@@ -112,7 +112,7 @@ class Api::DealTargetsController < ApplicationController
   private
 
   def set_deal_target
-    @deal_target = DealTarget.includes(:deal, :target, :owner, :activities).find(params[:id])
+    @deal_target = DealTarget.includes(:deal, :target, :owner, :activities, tasks: :assigned_to).find(params[:id])
   end
 
   def deal_target_params
@@ -144,6 +144,8 @@ class Api::DealTargetsController < ApplicationController
       activityCount: deal_target.activity_count,
       nextStep: deal_target.next_step,
       nextStepAt: deal_target.next_step_at,
+      tasks: deal_target.tasks.select { |t| !t.completed? }.sort_by { |t| t.due_at || Time.new(9999) }.map { |t| taskable_task_json(t) },
+      nextTask: next_task_json(deal_target.tasks),
       owner: deal_target.owner ? {
         id: deal_target.owner.id,
         firstName: deal_target.owner.first_name,
@@ -198,6 +200,41 @@ class Api::DealTargetsController < ApplicationController
       subject: activity.subject,
       occurredAt: activity.occurred_at,
       outcome: activity.outcome
+    }
+  end
+
+  def taskable_task_json(task)
+    {
+      id: task.id,
+      subject: task.subject,
+      dueAt: task.due_at,
+      completed: task.completed,
+      priority: task.priority,
+      priorityLabel: task.priority_label,
+      status: task.status,
+      overdue: task.overdue?,
+      assignedTo: task.assigned_to ? {
+        id: task.assigned_to.id,
+        firstName: task.assigned_to.first_name,
+        lastName: task.assigned_to.last_name
+      } : nil
+    }
+  end
+
+  def next_task_json(tasks)
+    next_task = tasks.select { |t| !t.completed? }.min_by { |t| t.due_at || Time.new(9999) }
+    return nil unless next_task
+
+    {
+      id: next_task.id,
+      subject: next_task.subject,
+      dueAt: next_task.due_at,
+      overdue: next_task.overdue?,
+      assignedTo: next_task.assigned_to ? {
+        id: next_task.assigned_to.id,
+        firstName: next_task.assigned_to.first_name,
+        lastName: next_task.assigned_to.last_name
+      } : nil
     }
   end
 end

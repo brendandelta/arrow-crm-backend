@@ -6,6 +6,7 @@ class Interest < ApplicationRecord
   belongs_to :introduced_by, class_name: "Person", optional: true
   belongs_to :allocated_block, class_name: "Block", optional: true
   belongs_to :owner, class_name: "User", optional: true
+  has_many :tasks, as: :taskable, dependent: :nullify
 
   validates :deal_id, presence: true
   validates :investor_id, presence: true

@@ -10,6 +10,7 @@ class Block < ApplicationRecord
   belongs_to :broker_contact, class_name: "Person", optional: true
 
   has_many :interests, foreign_key: :allocated_block_id
+  has_many :tasks, as: :taskable, dependent: :nullify
 
   validates :deal_id, presence: true
   validates :status, presence: true, inclusion: { in: STATUSES }

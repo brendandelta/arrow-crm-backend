@@ -266,7 +266,7 @@ class Api::DealsController < ApplicationController
 
   def mind_map
     deals = Deal.where.not(status: "dead")
-                .includes(:company, :owner, :blocks, :interests, :deal_targets, :tasks)
+                .includes(:company, :owner, :blocks, :interests, :deal_targets, tasks: :assigned_to)
                 .order(priority: :desc, created_at: :desc)
 
     groups = %w[arrow liberator].map do |owner_type|
@@ -370,62 +370,54 @@ class Api::DealsController < ApplicationController
   end
 
   def compute_next_action(deal)
-    # Check for overdue tasks on the deal
-    overdue_task = deal.tasks.overdue.by_due_date.first
-    if overdue_task
-      return { label: "#{overdue_task.subject} (overdue)", dueAt: overdue_task.due_at, isOverdue: true, kind: "task" }
-    end
+    # Find the earliest open task for this deal (any taskable or deal-level)
+    all_open = deal.tasks.select { |t| !t.completed? }
+    with_date = all_open.select { |t| t.due_at.present? }.sort_by(&:due_at)
 
-    # Check for nearest due task
-    next_task = deal.tasks.open_tasks.where.not(due_at: nil).order(due_at: :asc).first
-    if next_task
-      return { label: next_task.subject, dueAt: next_task.due_at, isOverdue: false, kind: "task" }
-    end
-
-    # Check for nearest next_step_at from deal_targets
-    next_target = deal.deal_targets.active.where.not(next_step_at: nil).order(next_step_at: :asc).first
-    if next_target
-      return { label: next_target.next_step || "Follow up", dueAt: next_target.next_step_at, isOverdue: next_target.next_step_at < Date.current, kind: "target" }
+    task = with_date.first || all_open.first
+    if task
+      is_overdue = task.due_at.present? && task.due_at < Time.current
+      label = is_overdue ? "#{task.subject} (overdue)" : task.subject
+      kind = task.taskable_type ? task.taskable_type.underscore.gsub("deal_", "") : "task"
+      return { label: label, dueAt: task.due_at, isOverdue: is_overdue, kind: kind }
     end
 
     { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
   end
 
   def compute_next_action_for_block(deal, block)
-    # Tasks linked to this deal that mention the block
-    overdue_task = deal.tasks.overdue.by_due_date.first
-    if overdue_task
-      return { label: "#{overdue_task.subject} (overdue)", dueAt: overdue_task.due_at, isOverdue: true, kind: "task" }
-    end
-
-    next_task = deal.tasks.open_tasks.where.not(due_at: nil).order(due_at: :asc).first
-    if next_task
-      return { label: next_task.subject, dueAt: next_task.due_at, isOverdue: false, kind: "task" }
-    end
+    task = find_next_task_for(deal, "Block", block.id)
+    return task_to_next_action(task, "task") if task
 
     { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
   end
 
   def compute_next_action_for_interest(deal, interest)
-    if interest.next_step_at.present?
-      is_overdue = interest.next_step_at < Date.current
-      label = interest.next_step || "Follow up"
-      label = "#{label} (overdue)" if is_overdue
-      return { label: label, dueAt: interest.next_step_at, isOverdue: is_overdue, kind: "interest" }
-    end
+    task = find_next_task_for(deal, "Interest", interest.id)
+    return task_to_next_action(task, "interest") if task
 
     { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
   end
 
   def compute_next_action_for_target(deal, target)
-    if target.next_step_at.present?
-      is_overdue = target.next_step_at < Date.current
-      label = target.next_step || "Follow up"
-      label = "#{label} (overdue)" if is_overdue
-      return { label: label, dueAt: target.next_step_at, isOverdue: is_overdue, kind: "target" }
-    end
+    task = find_next_task_for(deal, "DealTarget", target.id)
+    return task_to_next_action(task, "target") if task
 
     { label: "No next action set", dueAt: nil, isOverdue: false, kind: "none" }
+  end
+
+  def find_next_task_for(deal, taskable_type, taskable_id)
+    candidates = deal.tasks
+        .select { |t| !t.completed? && t.taskable_type == taskable_type && t.taskable_id == taskable_id }
+    # Prefer tasks with a due date, otherwise take any open task
+    with_date = candidates.select { |t| t.due_at.present? }
+    with_date.any? ? with_date.min_by(&:due_at) : candidates.first
+  end
+
+  def task_to_next_action(task, kind)
+    is_overdue = task.due_at.present? && task.due_at < Time.current
+    label = is_overdue ? "#{task.subject} (overdue)" : task.subject
+    { label: label, dueAt: task.due_at, isOverdue: is_overdue, kind: kind }
   end
 
   def deal_params

@@ -12,6 +12,10 @@ class Task < ApplicationRecord
   belongs_to :organization, optional: true
   belongs_to :person, optional: true
 
+  # Polymorphic link to a specific sub-entity within a deal
+  # taskable can be: DealTarget, Interest, or Block
+  belongs_to :taskable, polymorphic: true, optional: true
+
   # Validations
   validates :subject, presence: true
 
@@ -45,6 +49,14 @@ class Task < ApplicationRecord
   scope :project_tasks, -> { where.not(project_id: nil) }
   scope :general_tasks, -> { where(deal_id: nil, project_id: nil) }
   scope :unassigned, -> { where(assigned_to_id: nil) }
+
+  # Taskable scopes - filter by linked sub-entity
+  scope :for_taskable, ->(type, id) { where(taskable_type: type, taskable_id: id) }
+  scope :for_deal_target, ->(id) { where(taskable_type: "DealTarget", taskable_id: id) }
+  scope :for_interest, ->(id) { where(taskable_type: "Interest", taskable_id: id) }
+  scope :for_block, ->(id) { where(taskable_type: "Block", taskable_id: id) }
+  scope :deal_level, -> { where(taskable_type: nil) }
+  scope :with_taskable, -> { where.not(taskable_type: nil) }
 
   # Due date scopes for filtering
   scope :due_soon, -> { where(due_at: Time.current..7.days.from_now) }
@@ -161,6 +173,18 @@ class Task < ApplicationRecord
 
   def general_task?
     deal_id.nil? && project_id.nil?
+  end
+
+  # Taskable helpers
+  def taskable_name
+    case taskable_type
+    when "DealTarget"
+      taskable&.target_name
+    when "Interest"
+      taskable&.investor&.name
+    when "Block"
+      taskable&.share_class || "Block ##{taskable_id}"
+    end
   end
 
   # Callbacks

@@ -2,7 +2,7 @@ class Api::TasksController < ApplicationController
   before_action :set_task, only: [:show, :update, :destroy, :complete, :uncomplete]
 
   def index
-    tasks = Task.includes(:assigned_to, :created_by, :parent_task, :subtasks, :deal, :project, :organization, :person)
+    tasks = Task.includes(:assigned_to, :created_by, :parent_task, :subtasks, :deal, :project, :organization, :person, :taskable)
                 .order(created_at: :desc)
 
     # Filter by entity
@@ -10,6 +10,15 @@ class Api::TasksController < ApplicationController
     tasks = tasks.for_project(params[:project_id]) if params[:project_id].present?
     tasks = tasks.for_organization(params[:organization_id]) if params[:organization_id].present?
     tasks = tasks.for_person(params[:person_id]) if params[:person_id].present?
+
+    # Filter by taskable (sub-entity within a deal)
+    if params[:taskable_type].present? && params[:taskable_id].present?
+      tasks = tasks.for_taskable(params[:taskable_type], params[:taskable_id])
+    elsif params[:taskable_type].present?
+      tasks = tasks.where(taskable_type: params[:taskable_type])
+    elsif params[:deal_level] == "true"
+      tasks = tasks.deal_level
+    end
 
     # Filter by attachment type
     tasks = tasks.deal_tasks if params[:attachment] == "deal"
@@ -82,7 +91,7 @@ class Api::TasksController < ApplicationController
   def my_tasks
     # This would use current_user when authentication is implemented
     # For now, can filter by assigned_to_id
-    tasks = Task.includes(:assigned_to, :deal, :project, :organization, :person)
+    tasks = Task.includes(:assigned_to, :deal, :project, :organization, :person, :taskable)
                 .root_tasks
                 .open_tasks
                 .by_due_date
@@ -103,7 +112,7 @@ class Api::TasksController < ApplicationController
 
   # GET /api/tasks/grouped
   def grouped
-    tasks = Task.includes(:assigned_to, :deal, :project, :organization, :person)
+    tasks = Task.includes(:assigned_to, :deal, :project, :organization, :person, :taskable)
                 .order(Arel.sql("CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC"))
 
     # Filter by entity if provided
@@ -127,7 +136,7 @@ class Api::TasksController < ApplicationController
 
   # GET /api/tasks/grouped_by_deal
   def grouped_by_deal
-    tasks = Task.includes(:assigned_to, :subtasks, :deal)
+    tasks = Task.includes(:assigned_to, :subtasks, :deal, :taskable)
                 .root_tasks
                 .open_tasks
                 .deal_tasks
@@ -253,7 +262,7 @@ class Api::TasksController < ApplicationController
   private
 
   def set_task
-    @task = Task.includes(:assigned_to, :created_by, :parent_task, :subtasks, :deal, :project, :organization, :person)
+    @task = Task.includes(:assigned_to, :created_by, :parent_task, :subtasks, :deal, :project, :organization, :person, :taskable)
                 .find(params[:id])
   end
 
@@ -261,7 +270,8 @@ class Api::TasksController < ApplicationController
     params.require(:task).permit(
       :subject, :body, :due_at, :completed, :priority, :status,
       :parent_task_id, :assigned_to_id, :created_by_id,
-      :deal_id, :project_id, :organization_id, :person_id
+      :deal_id, :project_id, :organization_id, :person_id,
+      :taskable_type, :taskable_id
     )
   end
 
@@ -304,6 +314,9 @@ class Api::TasksController < ApplicationController
       personId: task.person_id,
       linkedEntityType: task.linked_entity_type,
       linkedEntityName: task.linked_entity_name,
+      taskableType: task.taskable_type,
+      taskableId: task.taskable_id,
+      taskableName: task.taskable_name,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     }

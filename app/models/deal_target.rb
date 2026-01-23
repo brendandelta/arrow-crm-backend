@@ -3,6 +3,7 @@ class DealTarget < ApplicationRecord
   belongs_to :target, polymorphic: true  # Organization or Person
   belongs_to :owner, class_name: "User", optional: true
   has_many :activities, dependent: :destroy
+  has_many :tasks, as: :taskable, dependent: :nullify
 
   validates :deal_id, presence: true
   validates :target_type, presence: true, inclusion: { in: %w[Organization Person] }

@@ -2,7 +2,7 @@ class Api::BlocksController < ApplicationController
   before_action :set_block, only: [:show, :update, :destroy]
 
   def index
-    blocks = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, deal: :company)
+    blocks = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, deal: :company)
                   .order(created_at: :desc)
 
     render json: blocks.map { |block| block_json(block) }
@@ -38,7 +38,7 @@ class Api::BlocksController < ApplicationController
   private
 
   def set_block
-    @block = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, deal: :company).find(params[:id])
+    @block = Block.includes(:deal, :seller, :contact, :broker, :broker_contact, :tasks, deal: :company).find(params[:id])
   end
 
   def block_params
@@ -53,6 +53,41 @@ class Api::BlocksController < ApplicationController
       :heat, :terms,
       :rofr, :transfer_approval_required, :issuer_approval_required
     )
+  end
+
+  def taskable_task_json(task)
+    {
+      id: task.id,
+      subject: task.subject,
+      dueAt: task.due_at,
+      completed: task.completed,
+      priority: task.priority,
+      priorityLabel: task.priority_label,
+      status: task.status,
+      overdue: task.overdue?,
+      assignedTo: task.assigned_to ? {
+        id: task.assigned_to.id,
+        firstName: task.assigned_to.first_name,
+        lastName: task.assigned_to.last_name
+      } : nil
+    }
+  end
+
+  def next_task_json(tasks)
+    next_task = tasks.select { |t| !t.completed? }.min_by { |t| t.due_at || Time.new(9999) }
+    return nil unless next_task
+
+    {
+      id: next_task.id,
+      subject: next_task.subject,
+      dueAt: next_task.due_at,
+      overdue: next_task.overdue?,
+      assignedTo: next_task.assigned_to ? {
+        id: next_task.assigned_to.id,
+        firstName: next_task.assigned_to.first_name,
+        lastName: next_task.assigned_to.last_name
+      } : nil
+    }
   end
 
   def block_json(block, full: false)
@@ -114,6 +149,8 @@ class Api::BlocksController < ApplicationController
       transferApprovalRequired: block.transfer_approval_required,
       issuerApprovalRequired: block.issuer_approval_required,
       constraints: block.constraints,
+      tasks: block.tasks.select { |t| !t.completed? }.sort_by { |t| t.due_at || Time.new(9999) }.map { |t| taskable_task_json(t) },
+      nextTask: next_task_json(block.tasks),
       createdAt: block.created_at,
       updatedAt: block.updated_at
     }

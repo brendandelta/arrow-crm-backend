@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_22_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -151,6 +151,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.datetime "updated_at", null: false
     t.integer "heat", default: 0
     t.text "terms"
+    t.boolean "rofr", default: false
+    t.boolean "transfer_approval_required", default: false
+    t.boolean "issuer_approval_required", default: false
     t.index ["broker_contact_id"], name: "index_blocks_on_broker_contact_id"
     t.index ["broker_id"], name: "index_blocks_on_broker_id"
     t.index ["contact_id"], name: "index_blocks_on_contact_id"
@@ -560,11 +563,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "project_id"
+    t.string "taskable_type"
+    t.bigint "taskable_id"
     t.index ["assigned_to_id", "completed"], name: "idx_tasks_assigned_open"
     t.index ["assigned_to_id"], name: "index_tasks_on_assigned_to_id"
     t.index ["completed", "due_at"], name: "idx_tasks_open_due"
     t.index ["completed"], name: "index_tasks_on_completed"
     t.index ["created_by_id"], name: "index_tasks_on_created_by_id"
+    t.index ["deal_id", "taskable_type", "taskable_id"], name: "index_tasks_on_deal_id_and_taskable_type_and_taskable_id"
     t.index ["deal_id"], name: "index_tasks_on_deal_id"
     t.index ["due_at"], name: "index_tasks_on_due_at"
     t.index ["organization_id"], name: "index_tasks_on_organization_id"
@@ -573,6 +579,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_21_000002) do
     t.index ["priority"], name: "index_tasks_on_priority"
     t.index ["project_id"], name: "index_tasks_on_project_id"
     t.index ["status"], name: "index_tasks_on_status"
+    t.index ["taskable_type", "taskable_id"], name: "index_tasks_on_taskable_type_and_taskable_id"
   end
 
   create_table "users", force: :cascade do |t|

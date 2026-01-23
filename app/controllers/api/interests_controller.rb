@@ -2,7 +2,7 @@ class Api::InterestsController < ApplicationController
   before_action :set_interest, only: [:show, :update, :destroy]
 
   def index
-    interests = Interest.includes(:deal, :investor, :contact, :decision_maker, deal: :company)
+    interests = Interest.includes(:deal, :investor, :contact, :decision_maker, :tasks, deal: :company)
                         .order(created_at: :desc)
 
     render json: interests.map { |interest| interest_json(interest) }
@@ -38,7 +38,7 @@ class Api::InterestsController < ApplicationController
   private
 
   def set_interest
-    @interest = Interest.includes(:deal, :investor, :contact, :decision_maker, deal: :company).find(params[:id])
+    @interest = Interest.includes(:deal, :investor, :contact, :decision_maker, :tasks, deal: :company).find(params[:id])
   end
 
   def interest_params
@@ -50,6 +50,41 @@ class Api::InterestsController < ApplicationController
       :introduced_by_id, :owner_id, :internal_notes,
       :next_step, :next_step_at
     )
+  end
+
+  def taskable_task_json(task)
+    {
+      id: task.id,
+      subject: task.subject,
+      dueAt: task.due_at,
+      completed: task.completed,
+      priority: task.priority,
+      priorityLabel: task.priority_label,
+      status: task.status,
+      overdue: task.overdue?,
+      assignedTo: task.assigned_to ? {
+        id: task.assigned_to.id,
+        firstName: task.assigned_to.first_name,
+        lastName: task.assigned_to.last_name
+      } : nil
+    }
+  end
+
+  def next_task_json(tasks)
+    next_task = tasks.select { |t| !t.completed? }.min_by { |t| t.due_at || Time.new(9999) }
+    return nil unless next_task
+
+    {
+      id: next_task.id,
+      subject: next_task.subject,
+      dueAt: next_task.due_at,
+      overdue: next_task.overdue?,
+      assignedTo: next_task.assigned_to ? {
+        id: next_task.assigned_to.id,
+        firstName: next_task.assigned_to.first_name,
+        lastName: next_task.assigned_to.last_name
+      } : nil
+    }
   end
 
   def interest_json(interest, full: false)
@@ -90,6 +125,8 @@ class Api::InterestsController < ApplicationController
       sourceDetail: interest.source_detail,
       nextStep: interest.next_step,
       nextStepAt: interest.next_step_at,
+      tasks: interest.tasks.select { |t| !t.completed? }.sort_by { |t| t.due_at || Time.new(9999) }.map { |t| taskable_task_json(t) },
+      nextTask: next_task_json(interest.tasks),
       createdAt: interest.created_at,
       updatedAt: interest.updated_at
     }
