@@ -77,6 +77,39 @@ Rails.application.routes.draw do
 
     # Users (for assignee dropdowns)
     resources :users, only: [:index, :show]
+
+    # Internal Entities (Arrow-controlled entities: MgmtCo, GP, SPVs, Trusts)
+    resources :internal_entities, only: [:index, :show, :create, :update, :destroy] do
+      member do
+        post :reveal_ein           # POST /api/internal_entities/:id/reveal_ein
+      end
+      resources :bank_accounts, only: [:create], controller: 'bank_accounts'
+      resources :signers, only: [:create], controller: 'entity_signers'
+    end
+
+    # Bank Accounts (standalone routes for update/delete/reveal)
+    resources :bank_accounts, only: [:show, :update, :destroy] do
+      member do
+        post :reveal_numbers       # POST /api/bank_accounts/:id/reveal_numbers
+      end
+    end
+
+    # Entity Signers (standalone routes for update/delete)
+    resources :entity_signers, only: [:show, :update, :destroy]
+
+    # Documents (enhanced document management)
+    resources :documents, only: [:index, :show, :create, :update, :destroy] do
+      member do
+        post :new_version          # POST /api/documents/:id/new_version
+      end
+    end
+
+    # Document Links (unified linking)
+    resources :document_links, only: [:index, :show, :create, :update, :destroy] do
+      collection do
+        post :bulk_create          # POST /api/document_links/bulk_create
+      end
+    end
   end
 
   # Rails health check for load balancers

@@ -3,6 +3,8 @@ class Person < ApplicationRecord
   has_many :employments, dependent: :destroy
   has_many :organizations, through: :employments
   has_many :documents, as: :parent, dependent: :destroy
+  has_many :document_links, as: :linkable, dependent: :destroy
+  has_many :linked_documents, through: :document_links, source: :document
   has_many :notes, as: :parent, dependent: :destroy
   has_many :deal_targets, as: :target, dependent: :destroy
   has_many :activities, as: :regarding, dependent: :destroy
@@ -10,6 +12,8 @@ class Person < ApplicationRecord
   has_many :tasks, dependent: :destroy
   has_many :edge_people, dependent: :destroy
   has_many :edges, through: :edge_people
+  has_many :entity_signers, dependent: :destroy
+  has_many :signed_entities, through: :entity_signers, source: :internal_entity
 
   # Avatar image attachment (stored on AWS S3)
   # This single line gives us: person.avatar, person.avatar.attach(), person.avatar.attached?, etc.

@@ -5,6 +5,8 @@ class Deal < ApplicationRecord
   has_many :interests, dependent: :destroy
   has_many :meetings, dependent: :nullify
   has_many :documents, as: :parent, dependent: :destroy
+  has_many :document_links, as: :linkable, dependent: :destroy
+  has_many :linked_documents, through: :document_links, source: :document
   has_many :notes, as: :parent, dependent: :destroy
   has_many :deal_targets, dependent: :destroy
   has_many :activities, dependent: :destroy

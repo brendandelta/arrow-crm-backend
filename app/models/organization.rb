@@ -1,11 +1,14 @@
 class Organization < ApplicationRecord
   belongs_to :owner, class_name: "User", optional: true
   belongs_to :parent_org, class_name: "Organization", optional: true
+  belongs_to :internal_entity, optional: true  # Bridge for migration
   has_many :subsidiaries, class_name: "Organization", foreign_key: :parent_org_id, dependent: :nullify
   has_many :employments, dependent: :destroy
   has_many :people, through: :employments
   has_many :deals, foreign_key: :company_id, dependent: :destroy
   has_many :documents, as: :parent, dependent: :destroy
+  has_many :document_links, as: :linkable, dependent: :destroy
+  has_many :linked_documents, through: :document_links, source: :document
   has_many :notes, as: :parent, dependent: :destroy
   has_many :deal_targets, as: :target, dependent: :destroy
   has_many :activities, as: :regarding, dependent: :destroy
@@ -14,6 +17,10 @@ class Organization < ApplicationRecord
 
   validates :name, presence: true
   validates :kind, presence: true
+
+  # Scopes for internal vs external organizations
+  scope :external, -> { where(is_internal: false) }
+  scope :internal, -> { where(is_internal: true) }
 
   scope :funds, -> { where(kind: "fund") }
   scope :companies, -> { where(kind: "company") }

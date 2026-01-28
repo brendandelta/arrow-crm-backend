@@ -2,6 +2,12 @@ class Api::OrganizationsController < ApplicationController
   def index
     organizations = Organization.includes(:employments, :deals).order(:name)
 
+    # Filter out internal orgs by default (use in pickers, lists)
+    # Pass include_internal=true to see all orgs
+    unless params[:include_internal] == 'true'
+      organizations = organizations.external
+    end
+
     if params[:q].present?
       organizations = organizations.where("name ILIKE ?", "%#{params[:q]}%")
     end
@@ -18,7 +24,9 @@ class Api::OrganizationsController < ApplicationController
         warmth: org.warmth || 0,
         peopleCount: org.employments.where(is_current: true).count,
         dealsCount: org.deals.count,
-        lastContactedAt: org.last_contacted_at
+        lastContactedAt: org.last_contacted_at,
+        isInternal: org.is_internal,
+        internalEntityId: org.internal_entity_id
       }
     }
   end
@@ -75,6 +83,8 @@ class Api::OrganizationsController < ApplicationController
           committed: d.committed_cents
         }
       },
+      isInternal: org.is_internal,
+      internalEntityId: org.internal_entity_id,
       createdAt: org.created_at,
       updatedAt: org.updated_at
     }
