@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_22_000005) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -273,6 +273,40 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_000005) do
     t.index ["kind"], name: "index_documents_on_kind"
     t.index ["parent_type", "parent_id"], name: "index_documents_on_parent_type_and_parent_id"
     t.index ["uploaded_by_id"], name: "index_documents_on_uploaded_by_id"
+  end
+
+  create_table "edge_people", force: :cascade do |t|
+    t.bigint "edge_id", null: false
+    t.bigint "person_id", null: false
+    t.string "role"
+    t.text "context"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edge_id", "person_id"], name: "idx_edge_people_unique", unique: true
+    t.index ["edge_id"], name: "index_edge_people_on_edge_id"
+    t.index ["person_id"], name: "index_edge_people_on_person_id"
+  end
+
+  create_table "edges", force: :cascade do |t|
+    t.bigint "deal_id", null: false
+    t.string "title", null: false
+    t.string "edge_type", null: false
+    t.integer "confidence", default: 3, null: false
+    t.integer "timeliness", default: 3, null: false
+    t.text "notes"
+    t.bigint "related_person_id"
+    t.bigint "related_org_id"
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["confidence"], name: "index_edges_on_confidence"
+    t.index ["created_by_id"], name: "index_edges_on_created_by_id"
+    t.index ["deal_id", "edge_type"], name: "idx_edges_deal_type"
+    t.index ["deal_id"], name: "index_edges_on_deal_id"
+    t.index ["edge_type"], name: "index_edges_on_edge_type"
+    t.index ["related_org_id"], name: "index_edges_on_related_org_id"
+    t.index ["related_person_id"], name: "index_edges_on_related_person_id"
+    t.index ["timeliness"], name: "index_edges_on_timeliness"
   end
 
   create_table "employments", force: :cascade do |t|
@@ -633,6 +667,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_22_000005) do
   add_foreign_key "deals", "people", column: "referred_by_id"
   add_foreign_key "deals", "users", column: "owner_id"
   add_foreign_key "documents", "users", column: "uploaded_by_id"
+  add_foreign_key "edge_people", "edges"
+  add_foreign_key "edge_people", "people"
+  add_foreign_key "edges", "deals"
+  add_foreign_key "edges", "organizations", column: "related_org_id"
+  add_foreign_key "edges", "people", column: "related_person_id"
+  add_foreign_key "edges", "users", column: "created_by_id"
   add_foreign_key "employments", "organizations"
   add_foreign_key "employments", "people"
   add_foreign_key "interests", "blocks", column: "allocated_block_id"

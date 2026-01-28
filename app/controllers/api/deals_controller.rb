@@ -95,7 +95,7 @@ class Api::DealsController < ApplicationController
       :owner,
       :advantages,
       :documents,
-      edges: [:related_person, :related_org, :created_by],
+      edges: [:related_person, :related_org, :created_by, { edge_people: :person }],
       blocks: [:seller, :contact, :broker, :broker_contact, :interests, { tasks: :assigned_to }],
       interests: [:investor, :contact, :decision_maker, :allocated_block, { tasks: :assigned_to }],
       deal_targets: [:target, :owner, :activities, { tasks: :assigned_to }],
@@ -248,6 +248,18 @@ class Api::DealsController < ApplicationController
             id: e.related_org.id,
             name: e.related_org.name
           } : nil,
+          # People linked to this edge (with roles)
+          people: e.edge_people.map { |ep|
+            {
+              id: ep.person.id,
+              firstName: ep.person.first_name,
+              lastName: ep.person.last_name,
+              title: ep.person.current_title,
+              organization: ep.person.current_org&.name,
+              role: ep.role,
+              context: ep.context
+            }
+          },
           createdBy: e.created_by ? {
             id: e.created_by.id,
             firstName: e.created_by.first_name,

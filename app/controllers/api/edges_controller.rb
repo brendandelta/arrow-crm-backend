@@ -2,6 +2,8 @@ class Api::EdgesController < ApplicationController
   def index
     edges = if params[:deal_id]
               Edge.where(deal_id: params[:deal_id])
+            elsif params[:person_id]
+              Edge.joins(:edge_people).where(edge_people: { person_id: params[:person_id] })
             else
               Edge.all
             end
@@ -11,6 +13,9 @@ class Api::EdgesController < ApplicationController
     edges = edges.high_confidence if params[:high_confidence] == "true"
     edges = edges.fresh if params[:fresh] == "true"
 
+    # Eager load associations
+    edges = edges.includes(:related_person, :related_org, :created_by, :edge_people, :people)
+
     # Default ordering by composite score (confidence * timeliness)
     edges = edges.by_score.limit(100)
 
@@ -18,7 +23,7 @@ class Api::EdgesController < ApplicationController
   end
 
   def show
-    edge = Edge.find(params[:id])
+    edge = Edge.includes(:related_person, :related_org, :created_by, :edge_people, :people).find(params[:id])
     render json: edge_json(edge)
   end
 
@@ -26,7 +31,9 @@ class Api::EdgesController < ApplicationController
     edge = Edge.new(edge_params)
 
     if edge.save
-      render json: edge_json(edge), status: :created
+      # Handle people associations
+      sync_edge_people(edge)
+      render json: edge_json(edge.reload), status: :created
     else
       render json: { errors: edge.errors.full_messages }, status: :unprocessable_entity
     end
@@ -36,7 +43,9 @@ class Api::EdgesController < ApplicationController
     edge = Edge.find(params[:id])
 
     if edge.update(edge_params)
-      render json: edge_json(edge)
+      # Handle people associations
+      sync_edge_people(edge)
+      render json: edge_json(edge.reload)
     else
       render json: { errors: edge.errors.full_messages }, status: :unprocessable_entity
     end
@@ -64,6 +73,24 @@ class Api::EdgesController < ApplicationController
     )
   end
 
+  def sync_edge_people(edge)
+    # Expect params[:people] as array of { person_id:, role:, context: }
+    return unless params[:people].is_a?(Array)
+
+    # Clear existing and rebuild
+    edge.edge_people.destroy_all
+
+    params[:people].each do |person_data|
+      next unless person_data[:person_id].present?
+
+      edge.edge_people.create!(
+        person_id: person_data[:person_id],
+        role: person_data[:role],
+        context: person_data[:context]
+      )
+    end
+  end
+
   def edge_json(edge)
     {
       id: edge.id,
@@ -87,6 +114,18 @@ class Api::EdgesController < ApplicationController
         id: edge.related_org.id,
         name: edge.related_org.name
       } : nil,
+      # People linked to this edge (with roles)
+      people: edge.edge_people.includes(:person).map { |ep|
+        {
+          id: ep.person.id,
+          firstName: ep.person.first_name,
+          lastName: ep.person.last_name,
+          title: ep.person.current_title,
+          organization: ep.person.current_org&.name,
+          role: ep.role,
+          context: ep.context
+        }
+      },
       createdBy: edge.created_by ? {
         id: edge.created_by.id,
         firstName: edge.created_by.first_name,

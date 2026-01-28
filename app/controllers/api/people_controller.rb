@@ -67,6 +67,12 @@ class Api::PeopleController < ApplicationController
       .where("(source_type = 'Person' AND source_id = ?) OR (target_type = 'Person' AND target_id = ?)", person.id, person.id)
       .where(status: "active")
 
+    # Find edges involving this person
+    person_edges = Edge.joins(:edge_people)
+      .where(edge_people: { person_id: person.id })
+      .includes(:deal, :related_person, :related_org, :created_by, { edge_people: :person })
+      .by_score
+
     render json: {
       id: person.id,
       firstName: person.first_name,
@@ -210,6 +216,52 @@ class Api::PeopleController < ApplicationController
           startedAt: rel.started_at,
           endedAt: rel.ended_at,
           notes: rel.notes
+        }
+      },
+      edges: person_edges.map { |edge|
+        edge_person = edge.edge_people.find { |ep| ep.person_id == person.id }
+        {
+          id: edge.id,
+          title: edge.title,
+          edgeType: edge.edge_type,
+          confidence: edge.confidence,
+          confidenceLabel: edge.confidence_label,
+          timeliness: edge.timeliness,
+          timelinessLabel: edge.timeliness_label,
+          notes: edge.notes,
+          score: edge.score,
+          role: edge_person&.role,
+          context: edge_person&.context,
+          deal: edge.deal ? {
+            id: edge.deal.id,
+            name: edge.deal.name
+          } : nil,
+          relatedPerson: edge.related_person ? {
+            id: edge.related_person.id,
+            firstName: edge.related_person.first_name,
+            lastName: edge.related_person.last_name
+          } : nil,
+          relatedOrg: edge.related_org ? {
+            id: edge.related_org.id,
+            name: edge.related_org.name
+          } : nil,
+          # Other people linked to this edge (excluding current person)
+          otherPeople: edge.edge_people.reject { |ep| ep.person_id == person.id }.map { |ep|
+            {
+              id: ep.person.id,
+              firstName: ep.person.first_name,
+              lastName: ep.person.last_name,
+              title: ep.person.current_title,
+              organization: ep.person.current_org&.name,
+              role: ep.role
+            }
+          },
+          createdBy: edge.created_by ? {
+            id: edge.created_by.id,
+            firstName: edge.created_by.first_name,
+            lastName: edge.created_by.last_name
+          } : nil,
+          createdAt: edge.created_at
         }
       },
       createdAt: person.created_at,

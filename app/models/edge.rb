@@ -5,6 +5,10 @@ class Edge < ApplicationRecord
   belongs_to :related_org, class_name: "Organization", optional: true
   belongs_to :created_by, class_name: "User", optional: true
 
+  # Multiple people can be linked to an edge
+  has_many :edge_people, dependent: :destroy
+  has_many :people, through: :edge_people
+
   # Validations
   validates :title, presence: true
   validates :edge_type, presence: true
