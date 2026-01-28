@@ -2,64 +2,109 @@ class Api::DocumentsController < ApplicationController
   before_action :set_document, only: [:show, :update, :destroy, :new_version]
 
   def index
-    documents = Document.includes(:document_links, :uploaded_by).order(created_at: :desc)
+    base_scope = Document.includes(:document_links, :uploaded_by)
+    documents = base_scope
 
     # Search
     if params[:q].present?
       documents = documents.search(params[:q])
     end
 
-    # Filter by category
+    # Filter by category (supports array)
     if params[:category].present?
-      documents = documents.by_category(params[:category])
+      categories = Array(params[:category])
+      documents = documents.where(category: categories)
     end
 
-    # Filter by status
+    # Filter by status (supports array)
     if params[:status].present?
-      documents = documents.by_status(params[:status])
+      statuses = Array(params[:status])
+      documents = documents.where(status: statuses)
     end
 
-    # Filter by sensitivity
+    # Filter by sensitivity (supports array)
     if params[:sensitivity].present?
-      documents = documents.where(sensitivity: params[:sensitivity])
+      sensitivities = Array(params[:sensitivity])
+      documents = documents.where(sensitivity: sensitivities)
     end
 
-    # Filter by doc_type (legacy)
+    # Filter by doc_type (supports array)
     if params[:doc_type].present?
-      documents = documents.by_kind(params[:doc_type])
+      doc_types = Array(params[:doc_type])
+      documents = documents.where(doc_type: doc_types)
     end
 
-    # Filter by linked entity
+    # Filter by linked entity type only (show all docs linked to that type)
+    if params[:linkable_type].present? && params[:linkable_id].blank?
+      documents = documents.joins(:document_links)
+                           .where(document_links: { linkable_type: params[:linkable_type] })
+                           .distinct
+    end
+
+    # Filter by specific linked entity
     if params[:linkable_type].present? && params[:linkable_id].present?
       documents = documents.joins(:document_links)
                            .where(document_links: {
                              linkable_type: params[:linkable_type],
                              linkable_id: params[:linkable_id]
                            })
+                           .distinct
     end
+
+    # Filter by confidential only
+    if params[:confidential] == 'true'
+      documents = documents.confidential
+    end
+
+    # Filter by needs_review (draft status)
+    if params[:needs_review] == 'true'
+      documents = documents.where(status: 'draft')
+    end
+
+    # Date range filtering
+    if params[:updated_after].present?
+      documents = documents.where('documents.updated_at >= ?', Time.parse(params[:updated_after]))
+    end
+    if params[:updated_before].present?
+      documents = documents.where('documents.updated_at <= ?', Time.parse(params[:updated_before]))
+    end
+
+    # Sorting
+    case params[:sort]
+    when 'title'
+      documents = documents.order('COALESCE(title, name) ASC')
+    when 'updatedAt'
+      documents = documents.order(updated_at: :desc)
+    when 'createdAt'
+      documents = documents.order(created_at: :desc)
+    else
+      documents = documents.order(updated_at: :desc)
+    end
+
+    # Get total before pagination
+    total = documents.count
 
     # Pagination
     page = (params[:page] || 1).to_i
     per_page = (params[:per_page] || 50).to_i.clamp(1, 100)
     documents = documents.limit(per_page).offset((page - 1) * per_page)
 
+    # Build facets with counts (from full filtered set, not paginated)
+    facets = build_facets(base_scope, params)
+
     render json: {
       documents: documents.map { |doc| document_summary_json(doc) },
-      pagination: {
+      pageInfo: {
         page: page,
         perPage: per_page,
-        total: Document.count
+        total: total
       },
-      facets: {
-        categories: Document::CATEGORIES,
-        statuses: Document::STATUSES,
-        sensitivities: Document::SENSITIVITIES
-      }
+      facets: facets
     }
   end
 
   def show
-    render json: document_detail_json(@document)
+    render json: document_detail_json(@document, include_preview_url: true)
   end
 
   def create
@@ -168,6 +213,35 @@ class Api::DocumentsController < ApplicationController
     end
   end
 
+  def build_facets(base_scope, filter_params)
+    # Build facets from the base scope (before filtering)
+    # Each facet shows count of documents in that category
+    {
+      category: Document::CATEGORIES.map do |cat|
+        { value: cat, label: cat.titleize, count: base_scope.where(category: cat).count }
+      end.select { |f| f[:count] > 0 },
+      docType: Document::DILIGENCE_KINDS.map do |dt|
+        { value: dt, label: dt.titleize.gsub('_', ' '), count: base_scope.where(doc_type: dt).count }
+      end.select { |f| f[:count] > 0 },
+      status: Document::STATUSES.map do |s|
+        { value: s, label: s.titleize, count: base_scope.where(status: s).count }
+      end.select { |f| f[:count] > 0 },
+      sensitivity: Document::SENSITIVITIES.map do |s|
+        label = case s
+                when 'highly_confidential' then 'Highly Confidential'
+                else s.titleize
+                end
+        { value: s, label: label, count: base_scope.where(sensitivity: s).count }
+      end.select { |f| f[:count] > 0 },
+      linkableType: [
+        { value: 'Deal', label: 'Deals', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Deal' }).distinct.count },
+        { value: 'Organization', label: 'Organizations', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Organization' }).distinct.count },
+        { value: 'Person', label: 'People', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Person' }).distinct.count },
+        { value: 'InternalEntity', label: 'Internal Entities', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'InternalEntity' }).distinct.count }
+      ].select { |f| f[:count] > 0 }
+    }
+  end
+
   def document_summary_json(doc)
     {
       id: doc.id,
@@ -183,14 +257,23 @@ class Api::DocumentsController < ApplicationController
       sourceLabel: doc.source_label,
       sensitivity: doc.sensitivity,
       sensitivityLabel: doc.sensitivity_label,
-      fileType: doc.file_type,
-      fileSizeBytes: doc.file_size_bytes,
-      fileSizeMb: doc.file_size_mb,
-      url: doc.url,
       isImage: doc.image?,
       isPdf: doc.pdf?,
-      linksCount: doc.document_links.count,
       version: doc.version,
+      file: {
+        filename: doc.name,
+        contentType: doc.file_type,
+        byteSize: doc.file_size_bytes
+      },
+      links: doc.document_links.includes(:linkable).map { |link|
+        {
+          id: link.id,
+          linkableType: link.linkable_type,
+          linkableId: link.linkable_id,
+          relationship: link.relationship,
+          label: link.linkable_label
+        }
+      },
       uploadedBy: doc.uploaded_by ? {
         id: doc.uploaded_by.id,
         name: doc.uploaded_by.full_name
@@ -200,8 +283,8 @@ class Api::DocumentsController < ApplicationController
     }
   end
 
-  def document_detail_json(doc)
-    {
+  def document_detail_json(doc, include_preview_url: false)
+    json = {
       id: doc.id,
       name: doc.name,
       title: doc.display_title,
@@ -245,11 +328,12 @@ class Api::DocumentsController < ApplicationController
           visibilityLabel: link.visibility_label
         }
       },
-      versionHistory: doc.version_history.map { |v|
+      versions: doc.version_history.map { |v|
         {
           id: v.id,
           version: v.version,
           status: v.status,
+          filename: v.name,
           createdAt: v.created_at
         }
       },
@@ -263,6 +347,18 @@ class Api::DocumentsController < ApplicationController
       createdAt: doc.created_at,
       updatedAt: doc.updated_at
     }
+
+    # Add preview URL for PDFs and images (short-lived presigned URL)
+    if include_preview_url && doc.file.attached? && (doc.pdf? || doc.image?)
+      json[:previewUrl] = Rails.application.routes.url_helpers.rails_blob_url(
+        doc.file,
+        disposition: 'inline',
+        expires_in: 1.hour,
+        only_path: true
+      )
+    end
+
+    json
   end
 
   def current_user
