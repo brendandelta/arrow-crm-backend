@@ -95,6 +95,7 @@ class Api::DealsController < ApplicationController
       :owner,
       :advantages,
       :documents,
+      edges: [:related_person, :related_org, :created_by],
       blocks: [:seller, :contact, :broker, :broker_contact, :interests, { tasks: :assigned_to }],
       interests: [:investor, :contact, :decision_maker, :allocated_block, { tasks: :assigned_to }],
       deal_targets: [:target, :owner, :activities, { tasks: :assigned_to }],
@@ -208,7 +209,7 @@ class Api::DealsController < ApplicationController
         items: doc_checklist
       },
 
-      # Advantages (hidden in LP mode on frontend)
+      # Advantages (hidden in LP mode on frontend) - legacy, prefer edges
       advantages: deal.advantages.recent.map { |a|
         {
           id: a.id,
@@ -221,6 +222,38 @@ class Api::DealsController < ApplicationController
           timelinessLabel: a.timeliness_label,
           source: a.source,
           createdAt: a.created_at
+        }
+      },
+
+      # Edges - unique insights/angles (hidden in LP mode on frontend)
+      edges: deal.edges.by_score.map { |e|
+        {
+          id: e.id,
+          title: e.title,
+          edgeType: e.edge_type,
+          confidence: e.confidence,
+          confidenceLabel: e.confidence_label,
+          timeliness: e.timeliness,
+          timelinessLabel: e.timeliness_label,
+          notes: e.notes,
+          score: e.score,
+          relatedPersonId: e.related_person_id,
+          relatedPerson: e.related_person ? {
+            id: e.related_person.id,
+            firstName: e.related_person.first_name,
+            lastName: e.related_person.last_name
+          } : nil,
+          relatedOrgId: e.related_org_id,
+          relatedOrg: e.related_org ? {
+            id: e.related_org.id,
+            name: e.related_org.name
+          } : nil,
+          createdBy: e.created_by ? {
+            id: e.created_by.id,
+            firstName: e.created_by.first_name,
+            lastName: e.created_by.last_name
+          } : nil,
+          createdAt: e.created_at
         }
       },
 

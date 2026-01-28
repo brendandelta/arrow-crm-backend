@@ -13,8 +13,11 @@ Rails.application.routes.draw do
       resources :targets, controller: "deal_targets", only: [:index, :create]
     end
 
-    # Advantages for deals (hidden in LP mode)
+    # Advantages for deals (hidden in LP mode) - legacy, prefer edges
     resources :advantages, only: [:index, :show, :create, :update, :destroy]
+
+    # Edges - unique insights/angles for closing deals (hidden in LP mode)
+    resources :edges, only: [:index, :show, :create, :update, :destroy]
 
     resources :organizations, only: [:index, :show, :create, :update]
     resources :people, only: [:index, :show, :create, :update] do

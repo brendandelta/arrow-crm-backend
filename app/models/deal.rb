@@ -9,6 +9,7 @@ class Deal < ApplicationRecord
   has_many :deal_targets, dependent: :destroy
   has_many :activities, dependent: :destroy
   has_many :advantages, dependent: :destroy
+  has_many :edges, dependent: :destroy
   has_many :tasks, dependent: :destroy
 
   validates :name, presence: true
