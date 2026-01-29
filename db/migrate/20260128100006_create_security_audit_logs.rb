@@ -21,8 +21,7 @@ class CreateSecurityAuditLogs < ActiveRecord::Migration[7.2]
     add_index :security_audit_logs, [:auditable_type, :auditable_id],
               name: 'idx_security_audit_logs_auditable'
 
-    # Index on actor for user activity queries
-    add_index :security_audit_logs, :actor_user_id
+    # Note: actor_user_id index is already created by t.references above
 
     # Index on created_at for time-based queries
     add_index :security_audit_logs, :created_at

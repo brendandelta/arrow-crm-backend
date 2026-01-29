@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_28_200005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -120,6 +120,32 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["timeliness"], name: "index_advantages_on_timeliness"
   end
 
+  create_table "bank_accounts", force: :cascade do |t|
+    t.bigint "internal_entity_id", null: false
+    t.string "bank_name"
+    t.string "account_name"
+    t.string "account_type", default: "checking"
+    t.text "routing_number_ciphertext"
+    t.string "routing_last4"
+    t.text "account_number_ciphertext"
+    t.string "account_last4"
+    t.text "swift_ciphertext"
+    t.string "nickname"
+    t.boolean "is_primary", default: false
+    t.string "status", default: "active", null: false
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_bank_accounts_on_created_by_id"
+    t.index ["internal_entity_id"], name: "idx_bank_accounts_entity"
+    t.index ["internal_entity_id"], name: "idx_bank_accounts_unique_primary", unique: true, where: "((is_primary = true) AND ((status)::text = 'active'::text))"
+    t.index ["internal_entity_id"], name: "index_bank_accounts_on_internal_entity_id"
+    t.index ["status"], name: "index_bank_accounts_on_status"
+    t.index ["updated_by_id"], name: "index_bank_accounts_on_updated_by_id"
+  end
+
   create_table "block_contacts", force: :cascade do |t|
     t.bigint "block_id", null: false
     t.bigint "person_id", null: false
@@ -174,6 +200,63 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["seller_id"], name: "index_blocks_on_seller_id"
     t.index ["source"], name: "index_blocks_on_source"
     t.index ["status"], name: "index_blocks_on_status"
+  end
+
+  create_table "credential_fields", force: :cascade do |t|
+    t.bigint "credential_id", null: false
+    t.string "label", null: false
+    t.string "field_type", default: "text", null: false
+    t.text "value_ciphertext"
+    t.string "value_last4"
+    t.boolean "is_secret", default: true
+    t.integer "sort_order", default: 0
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["credential_id", "sort_order"], name: "index_credential_fields_on_credential_id_and_sort_order"
+    t.index ["credential_id"], name: "index_credential_fields_on_credential_id"
+  end
+
+  create_table "credential_links", force: :cascade do |t|
+    t.bigint "credential_id", null: false
+    t.string "linkable_type", null: false
+    t.bigint "linkable_id", null: false
+    t.string "relationship", default: "general"
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_credential_links_on_created_by_id"
+    t.index ["credential_id", "linkable_type", "linkable_id", "relationship"], name: "idx_cred_links_unique", unique: true
+    t.index ["credential_id"], name: "index_credential_links_on_credential_id"
+    t.index ["linkable_type", "linkable_id"], name: "index_credential_links_on_linkable_type_and_linkable_id"
+  end
+
+  create_table "credentials", force: :cascade do |t|
+    t.bigint "vault_id", null: false
+    t.string "title", null: false
+    t.string "credential_type", default: "login", null: false
+    t.string "url"
+    t.text "username_ciphertext"
+    t.string "username_last4"
+    t.text "email_ciphertext"
+    t.string "email_last4"
+    t.text "notes_ciphertext"
+    t.text "secret_ciphertext"
+    t.string "secret_last4"
+    t.datetime "secret_last_rotated_at"
+    t.integer "rotation_interval_days"
+    t.string "sensitivity", default: "confidential"
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_credentials_on_created_by_id"
+    t.index ["credential_type"], name: "index_credentials_on_credential_type"
+    t.index ["metadata"], name: "index_credentials_on_metadata", using: :gin
+    t.index ["secret_last_rotated_at"], name: "index_credentials_on_secret_last_rotated_at"
+    t.index ["sensitivity"], name: "index_credentials_on_sensitivity"
+    t.index ["updated_by_id"], name: "index_credentials_on_updated_by_id"
+    t.index ["vault_id"], name: "index_credentials_on_vault_id"
   end
 
   create_table "deal_targets", force: :cascade do |t|
@@ -254,9 +337,26 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["tags"], name: "index_deals_on_tags", using: :gin
   end
 
+  create_table "document_links", force: :cascade do |t|
+    t.bigint "document_id", null: false
+    t.string "linkable_type", null: false
+    t.bigint "linkable_id", null: false
+    t.string "relationship", default: "general", null: false
+    t.string "visibility", default: "default", null: false
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_document_links_on_created_by_id"
+    t.index ["document_id", "linkable_type", "linkable_id", "relationship"], name: "idx_document_links_unique", unique: true
+    t.index ["document_id"], name: "index_document_links_on_document_id"
+    t.index ["linkable_type", "linkable_id"], name: "idx_document_links_linkable"
+    t.index ["relationship"], name: "index_document_links_on_relationship"
+    t.index ["visibility"], name: "index_document_links_on_visibility"
+  end
+
   create_table "documents", force: :cascade do |t|
     t.string "name", null: false
-    t.string "kind"
+    t.string "doc_type"
     t.string "url", null: false
     t.string "file_type"
     t.bigint "file_size_bytes"
@@ -270,9 +370,21 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.date "expires_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["kind"], name: "index_documents_on_kind"
+    t.string "title"
+    t.string "category", default: "other", null: false
+    t.string "status", default: "final", null: false
+    t.string "source", default: "uploaded"
+    t.string "sensitivity", default: "internal", null: false
+    t.uuid "version_group_id"
+    t.string "checksum"
+    t.index ["category"], name: "index_documents_on_category"
+    t.index ["checksum"], name: "index_documents_on_checksum"
+    t.index ["doc_type"], name: "index_documents_on_doc_type"
     t.index ["parent_type", "parent_id"], name: "index_documents_on_parent_type_and_parent_id"
+    t.index ["sensitivity"], name: "index_documents_on_sensitivity"
+    t.index ["status"], name: "index_documents_on_status"
     t.index ["uploaded_by_id"], name: "index_documents_on_uploaded_by_id"
+    t.index ["version_group_id"], name: "index_documents_on_version_group_id"
   end
 
   create_table "edge_people", force: :cascade do |t|
@@ -331,6 +443,24 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["person_id"], name: "index_employments_on_person_id"
   end
 
+  create_table "entity_signers", force: :cascade do |t|
+    t.bigint "internal_entity_id", null: false
+    t.bigint "person_id", null: false
+    t.string "role", null: false
+    t.date "effective_from"
+    t.date "effective_to"
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_entity_signers_on_created_by_id"
+    t.index ["internal_entity_id", "effective_from", "effective_to"], name: "idx_entity_signers_active"
+    t.index ["internal_entity_id", "person_id"], name: "idx_entity_signers_entity_person"
+    t.index ["internal_entity_id"], name: "index_entity_signers_on_internal_entity_id"
+    t.index ["person_id"], name: "index_entity_signers_on_person_id"
+    t.index ["role"], name: "index_entity_signers_on_role"
+  end
+
   create_table "interests", force: :cascade do |t|
     t.bigint "deal_id", null: false
     t.bigint "investor_id", null: false
@@ -369,6 +499,36 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["investor_id"], name: "index_interests_on_investor_id"
     t.index ["owner_id"], name: "index_interests_on_owner_id"
     t.index ["status"], name: "index_interests_on_status"
+  end
+
+  create_table "internal_entities", force: :cascade do |t|
+    t.string "name_legal", null: false
+    t.string "name_short"
+    t.string "entity_type", null: false
+    t.string "jurisdiction_country", default: "US"
+    t.string "jurisdiction_state"
+    t.date "formation_date"
+    t.string "status", default: "active", null: false
+    t.text "ein_ciphertext"
+    t.string "ein_last4"
+    t.string "tax_classification"
+    t.date "s_corp_effective_date"
+    t.string "registered_agent_name"
+    t.text "registered_agent_address"
+    t.text "primary_address"
+    t.text "mailing_address"
+    t.text "notes"
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "lower((name_legal)::text)", name: "index_internal_entities_on_name_legal_lower"
+    t.index ["created_by_id"], name: "index_internal_entities_on_created_by_id"
+    t.index ["entity_type"], name: "index_internal_entities_on_entity_type"
+    t.index ["metadata"], name: "index_internal_entities_on_metadata", using: :gin
+    t.index ["status"], name: "index_internal_entities_on_status"
+    t.index ["updated_by_id"], name: "index_internal_entities_on_updated_by_id"
   end
 
   create_table "meetings", force: :cascade do |t|
@@ -476,7 +636,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.datetime "next_follow_up_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "internal_entity_id"
+    t.boolean "is_internal", default: false, null: false
     t.index ["country", "state", "city"], name: "index_organizations_on_country_and_state_and_city"
+    t.index ["internal_entity_id"], name: "index_organizations_on_internal_entity_id"
+    t.index ["is_internal"], name: "index_organizations_on_is_internal"
     t.index ["kind"], name: "index_organizations_on_kind"
     t.index ["owner_id"], name: "index_organizations_on_owner_id"
     t.index ["parent_org_id"], name: "index_organizations_on_parent_org_id"
@@ -591,6 +755,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["target_type", "target_id"], name: "index_relationships_on_target_type_and_target_id"
   end
 
+  create_table "security_audit_logs", force: :cascade do |t|
+    t.bigint "actor_user_id", null: false
+    t.string "action", null: false
+    t.string "auditable_type", null: false
+    t.bigint "auditable_id", null: false
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.index ["action"], name: "index_security_audit_logs_on_action"
+    t.index ["actor_user_id", "action", "created_at"], name: "idx_security_audit_logs_actor_action_time"
+    t.index ["actor_user_id"], name: "index_security_audit_logs_on_actor_user_id"
+    t.index ["auditable_type", "auditable_id"], name: "idx_security_audit_logs_auditable"
+    t.index ["created_at"], name: "index_security_audit_logs_on_created_at"
+  end
+
   create_table "tasks", force: :cascade do |t|
     t.string "subject", null: false
     t.text "body"
@@ -645,6 +823,30 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
     t.index ["is_active"], name: "index_users_on_is_active"
   end
 
+  create_table "vault_memberships", force: :cascade do |t|
+    t.bigint "vault_id", null: false
+    t.bigint "user_id", null: false
+    t.string "role", default: "viewer", null: false
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_vault_memberships_on_created_by_id"
+    t.index ["user_id"], name: "index_vault_memberships_on_user_id"
+    t.index ["vault_id", "user_id"], name: "index_vault_memberships_on_vault_id_and_user_id", unique: true
+    t.index ["vault_id"], name: "index_vault_memberships_on_vault_id"
+  end
+
+  create_table "vaults", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "description"
+    t.jsonb "metadata", default: {}
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_vaults_on_created_by_id"
+    t.index ["name"], name: "index_vaults_on_name"
+  end
+
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "activities", "deal_targets"
@@ -653,6 +855,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "activities", "users", column: "performed_by_id"
   add_foreign_key "activity_attendees", "activities"
   add_foreign_key "advantages", "deals"
+  add_foreign_key "bank_accounts", "internal_entities"
+  add_foreign_key "bank_accounts", "users", column: "created_by_id"
+  add_foreign_key "bank_accounts", "users", column: "updated_by_id"
   add_foreign_key "block_contacts", "blocks"
   add_foreign_key "block_contacts", "people"
   add_foreign_key "blocks", "deals"
@@ -660,12 +865,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "blocks", "organizations", column: "seller_id"
   add_foreign_key "blocks", "people", column: "broker_contact_id"
   add_foreign_key "blocks", "people", column: "contact_id"
+  add_foreign_key "credential_fields", "credentials"
+  add_foreign_key "credential_links", "credentials"
+  add_foreign_key "credential_links", "users", column: "created_by_id"
+  add_foreign_key "credentials", "users", column: "created_by_id"
+  add_foreign_key "credentials", "users", column: "updated_by_id"
+  add_foreign_key "credentials", "vaults"
   add_foreign_key "deal_targets", "deals"
   add_foreign_key "deal_targets", "users", column: "owner_id"
   add_foreign_key "deals", "organizations", column: "broker_id"
   add_foreign_key "deals", "organizations", column: "company_id"
   add_foreign_key "deals", "people", column: "referred_by_id"
   add_foreign_key "deals", "users", column: "owner_id"
+  add_foreign_key "document_links", "documents"
+  add_foreign_key "document_links", "users", column: "created_by_id"
   add_foreign_key "documents", "users", column: "uploaded_by_id"
   add_foreign_key "edge_people", "edges"
   add_foreign_key "edge_people", "people"
@@ -675,6 +888,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "edges", "users", column: "created_by_id"
   add_foreign_key "employments", "organizations"
   add_foreign_key "employments", "people"
+  add_foreign_key "entity_signers", "internal_entities"
+  add_foreign_key "entity_signers", "people"
+  add_foreign_key "entity_signers", "users", column: "created_by_id"
   add_foreign_key "interests", "blocks", column: "allocated_block_id"
   add_foreign_key "interests", "deals"
   add_foreign_key "interests", "organizations", column: "investor_id"
@@ -682,10 +898,13 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "interests", "people", column: "decision_maker_id"
   add_foreign_key "interests", "people", column: "introduced_by_id"
   add_foreign_key "interests", "users", column: "owner_id"
+  add_foreign_key "internal_entities", "users", column: "created_by_id"
+  add_foreign_key "internal_entities", "users", column: "updated_by_id"
   add_foreign_key "meetings", "deals"
   add_foreign_key "meetings", "organizations"
   add_foreign_key "meetings", "users", column: "owner_id"
   add_foreign_key "notes", "users", column: "author_id"
+  add_foreign_key "organizations", "internal_entities"
   add_foreign_key "organizations", "organizations", column: "parent_org_id"
   add_foreign_key "organizations", "users", column: "owner_id"
   add_foreign_key "people", "users", column: "owner_id"
@@ -693,6 +912,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "relationships", "relationship_types"
   add_foreign_key "relationships", "users", column: "created_by_id"
+  add_foreign_key "security_audit_logs", "users", column: "actor_user_id"
   add_foreign_key "tasks", "deals"
   add_foreign_key "tasks", "organizations"
   add_foreign_key "tasks", "people"
@@ -700,4 +920,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_000002) do
   add_foreign_key "tasks", "tasks", column: "parent_task_id"
   add_foreign_key "tasks", "users", column: "assigned_to_id"
   add_foreign_key "tasks", "users", column: "created_by_id"
+  add_foreign_key "vault_memberships", "users"
+  add_foreign_key "vault_memberships", "users", column: "created_by_id"
+  add_foreign_key "vault_memberships", "vaults"
+  add_foreign_key "vaults", "users", column: "created_by_id"
 end

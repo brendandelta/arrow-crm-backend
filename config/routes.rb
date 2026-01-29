@@ -110,6 +110,37 @@ Rails.application.routes.draw do
         post :bulk_create          # POST /api/document_links/bulk_create
       end
     end
+
+    # Credential Vault System
+    resources :vaults, only: [:index, :show, :create, :update, :destroy] do
+      member do
+        get :rotation              # GET /api/vaults/:id/rotation
+      end
+      resources :memberships, controller: 'vault_memberships', only: [:index, :create]
+      resources :credentials, only: [:index, :create]
+    end
+
+    # Vault Memberships (standalone routes for update/delete)
+    resources :vault_memberships, only: [:update, :destroy]
+
+    # Credentials (standalone routes)
+    resources :credentials, only: [:show, :update, :destroy] do
+      member do
+        post :reveal               # POST /api/credentials/:id/reveal
+        post :copy                 # POST /api/credentials/:id/copy
+      end
+      resources :fields, controller: 'credential_fields', only: [:create]
+      resources :links, controller: 'credential_links', only: [:create]
+    end
+
+    # Credential Fields (standalone routes)
+    resources :credential_fields, only: [:update, :destroy]
+
+    # Credential Links (standalone routes)
+    resources :credential_links, only: [:destroy]
+
+    # Security Audit Logs (read-only for admin/ops)
+    resources :security_audit_logs, only: [:index]
   end
 
   # Rails health check for load balancers

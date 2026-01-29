@@ -22,7 +22,7 @@ class SecurityAuditLog < ApplicationRecord
   validates :action, inclusion: { in: ACTIONS }
 
   # Auditable types
-  AUDITABLE_TYPES = %w[InternalEntity BankAccount Document User].freeze
+  AUDITABLE_TYPES = %w[InternalEntity BankAccount Document User Credential].freeze
   validates :auditable_type, inclusion: { in: AUDITABLE_TYPES }
 
   # Scopes
@@ -120,6 +120,8 @@ class SecurityAuditLog < ApplicationRecord
       auditable&.display_title || "Document ##{auditable_id}"
     when 'User'
       auditable&.full_name || "User ##{auditable_id}"
+    when 'Credential'
+      auditable&.title || "Credential ##{auditable_id}"
     else
       "#{auditable_type} ##{auditable_id}"
     end
