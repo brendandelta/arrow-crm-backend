@@ -235,6 +235,8 @@ class Api::DocumentsController < ApplicationController
       end.select { |f| f[:count] > 0 },
       linkableType: [
         { value: 'Deal', label: 'Deals', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Deal' }).distinct.count },
+        { value: 'Block', label: 'Blocks', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Block' }).distinct.count },
+        { value: 'Interest', label: 'Interests', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Interest' }).distinct.count },
         { value: 'Organization', label: 'Organizations', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Organization' }).distinct.count },
         { value: 'Person', label: 'People', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'Person' }).distinct.count },
         { value: 'InternalEntity', label: 'Internal Entities', count: base_scope.joins(:document_links).where(document_links: { linkable_type: 'InternalEntity' }).distinct.count }

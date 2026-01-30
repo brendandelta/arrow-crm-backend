@@ -8,6 +8,8 @@ class Document < ApplicationRecord
 
   # Linked entities through document_links
   has_many :linked_deals, through: :document_links, source: :linkable, source_type: 'Deal'
+  has_many :linked_blocks, through: :document_links, source: :linkable, source_type: 'Block'
+  has_many :linked_interests, through: :document_links, source: :linkable, source_type: 'Interest'
   has_many :linked_organizations, through: :document_links, source: :linkable, source_type: 'Organization'
   has_many :linked_people, through: :document_links, source: :linkable, source_type: 'Person'
   has_many :linked_internal_entities, through: :document_links, source: :linkable, source_type: 'InternalEntity'

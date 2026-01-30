@@ -18,7 +18,7 @@ class DocumentLink < ApplicationRecord
   }
 
   # Linkable type validation
-  LINKABLE_TYPES = %w[Deal Organization Person InternalEntity].freeze
+  LINKABLE_TYPES = %w[Deal Block Interest Organization Person InternalEntity].freeze
   validates :linkable_type, inclusion: { in: LINKABLE_TYPES }
 
   # Relationship types
@@ -44,6 +44,8 @@ class DocumentLink < ApplicationRecord
 
   # Scopes
   scope :for_deals, -> { where(linkable_type: 'Deal') }
+  scope :for_blocks, -> { where(linkable_type: 'Block') }
+  scope :for_interests, -> { where(linkable_type: 'Interest') }
   scope :for_organizations, -> { where(linkable_type: 'Organization') }
   scope :for_people, -> { where(linkable_type: 'Person') }
   scope :for_internal_entities, -> { where(linkable_type: 'InternalEntity') }
@@ -69,6 +71,20 @@ class DocumentLink < ApplicationRecord
     case linkable_type
     when 'Deal'
       linkable&.name || "Deal ##{linkable_id}"
+    when 'Block'
+      if linkable
+        seller_name = linkable.seller&.name || 'Unknown Seller'
+        "Block: #{seller_name}"
+      else
+        "Block ##{linkable_id}"
+      end
+    when 'Interest'
+      if linkable
+        investor_name = linkable.investor&.name || 'Unknown Investor'
+        "Interest: #{investor_name}"
+      else
+        "Interest ##{linkable_id}"
+      end
     when 'Organization'
       linkable&.name || "Org ##{linkable_id}"
     when 'Person'

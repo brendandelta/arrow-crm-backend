@@ -12,6 +12,8 @@ class Block < ApplicationRecord
   has_many :interests, foreign_key: :allocated_block_id
   has_many :tasks, as: :taskable, dependent: :nullify
   has_many :block_contacts, dependent: :destroy
+  has_many :document_links, as: :linkable, dependent: :destroy
+  has_many :linked_documents, through: :document_links, source: :document
   has_many :linked_seller_contacts, -> { where(role: "seller_contact") }, class_name: "BlockContact"
   has_many :linked_broker_contacts, -> { where(role: "broker_contact") }, class_name: "BlockContact"
 
