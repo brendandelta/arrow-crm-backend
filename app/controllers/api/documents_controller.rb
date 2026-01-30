@@ -117,9 +117,26 @@ class Api::DocumentsController < ApplicationController
       @document.file.attach(params[:file])
       @document.file_size_bytes = params[:file].size
       @document.file_type = params[:file].content_type
+
+      # Set url to ActiveStorage placeholder if not provided (legacy field)
+      @document.url ||= "activestorage://pending"
     end
 
+    # Set default parent from first link if not provided (legacy compatibility)
+    if @document.parent_type.blank? && params[:links].present? && params[:links].first.present?
+      first_link = params[:links].first
+      @document.parent_type = first_link[:linkable_type]
+      @document.parent_id = first_link[:linkable_id]
+    end
+
+    # Fallback parent if still blank
+    @document.parent_type ||= "Document"
+    @document.parent_id ||= 0
+
     if @document.save
+      # Update url with actual document ID for traceability
+      @document.update_column(:url, "activestorage://#{@document.id}") if @document.url&.include?("pending")
+
       # Create document links if provided
       create_document_links(@document)
       render json: document_detail_json(@document), status: :created
@@ -350,12 +367,13 @@ class Api::DocumentsController < ApplicationController
       updatedAt: doc.updated_at
     }
 
-    # Add preview URL for PDFs and images (short-lived presigned URL)
+    # Add preview URL for PDFs and images
+    # Uses ActiveStorage's built-in signed URL handling
+    # Expiration is controlled by config.active_storage.service_urls_expire_in
     if include_preview_url && doc.file.attached? && (doc.pdf? || doc.image?)
       json[:previewUrl] = Rails.application.routes.url_helpers.rails_blob_url(
         doc.file,
         disposition: 'inline',
-        expires_in: 1.hour,
         only_path: true
       )
     end

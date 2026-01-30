@@ -80,6 +80,13 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
+  # Store files on Amazon S3 in production.
+  config.active_storage.service = :amazon
+
+  # Signed URL expiration for ActiveStorage (default is 5 minutes)
+  # This controls how long direct S3 URLs are valid
+  config.active_storage.service_urls_expire_in = 1.hour
+
   # Enable DNS rebinding protection and other `Host` header attacks.
   # config.hosts = [
   #   "example.com",     # Allow requests from example.com
