@@ -4,24 +4,100 @@ class Api::InternalEntitiesController < ApplicationController
   before_action :authorize_reveal!, only: [:reveal_ein]
 
   def index
-    entities = InternalEntity.includes(:bank_accounts, :entity_signers).order(:name_legal)
+    base_scope = InternalEntity.includes(:bank_accounts, :entity_signers, :document_links)
 
     # Search
     if params[:q].present?
-      entities = entities.search(params[:q])
+      base_scope = base_scope.search(params[:q])
     end
 
-    # Filter by status
+    # Filter by status (supports array)
     if params[:status].present?
-      entities = entities.where(status: params[:status])
+      statuses = Array(params[:status])
+      base_scope = base_scope.where(status: statuses)
     end
 
-    # Filter by entity type
+    # Filter by entity type (supports array)
     if params[:entity_type].present?
-      entities = entities.where(entity_type: params[:entity_type])
+      types = Array(params[:entity_type])
+      base_scope = base_scope.where(entity_type: types)
     end
 
-    render json: entities.map { |entity| entity_summary_json(entity) }
+    # Filter by jurisdiction state (supports array)
+    if params[:jurisdiction_state].present?
+      states = Array(params[:jurisdiction_state])
+      base_scope = base_scope.where(jurisdiction_state: states)
+    end
+
+    # Filter by has bank accounts
+    if params[:has_bank_accounts].present?
+      if params[:has_bank_accounts] == 'true'
+        base_scope = base_scope.joins(:bank_accounts).where(bank_accounts: { status: 'active' }).distinct
+      elsif params[:has_bank_accounts] == 'false'
+        base_scope = base_scope.left_joins(:bank_accounts)
+                               .where(bank_accounts: { id: nil })
+                               .or(base_scope.left_joins(:bank_accounts).where.not(bank_accounts: { status: 'active' }))
+                               .distinct
+      end
+    end
+
+    # Filter by has signers
+    if params[:has_signers].present?
+      if params[:has_signers] == 'true'
+        base_scope = base_scope.joins(:entity_signers).merge(EntitySigner.active).distinct
+      elsif params[:has_signers] == 'false'
+        active_signer_entity_ids = EntitySigner.active.select(:internal_entity_id)
+        base_scope = base_scope.where.not(id: active_signer_entity_ids)
+      end
+    end
+
+    # Filter by has documents
+    if params[:has_documents].present?
+      if params[:has_documents] == 'true'
+        base_scope = base_scope.joins(:document_links).distinct
+      elsif params[:has_documents] == 'false'
+        base_scope = base_scope.left_joins(:document_links).where(document_links: { id: nil })
+      end
+    end
+
+    # Build facets from unfiltered (but searched) scope for accurate counts
+    facet_scope = InternalEntity.all
+    facet_scope = facet_scope.search(params[:q]) if params[:q].present?
+
+    facets = {
+      entityType: InternalEntity::ENTITY_TYPES.map { |t| { value: t, count: facet_scope.where(entity_type: t).count } },
+      status: InternalEntity::STATUSES.map { |s| { value: s, count: facet_scope.where(status: s).count } },
+      jurisdictionState: facet_scope.where.not(jurisdiction_state: [nil, ''])
+                                    .group(:jurisdiction_state)
+                                    .order(:jurisdiction_state)
+                                    .count
+                                    .map { |state, count| { value: state, count: count } }
+    }
+
+    # Sorting
+    sort_field = params[:sort] || 'name'
+    entities = case sort_field
+               when 'name' then base_scope.order(:name_legal)
+               when 'updated_at', 'updatedAt' then base_scope.order(updated_at: :desc)
+               when 'formation_date', 'formationDate' then base_scope.order(formation_date: :desc)
+               else base_scope.order(:name_legal)
+               end
+
+    # Pagination
+    page = (params[:page] || 1).to_i
+    per_page = (params[:per_page] || 50).to_i.clamp(1, 100)
+    total = entities.count
+    entities = entities.limit(per_page).offset((page - 1) * per_page)
+
+    render json: {
+      internalEntities: entities.map { |entity| entity_summary_json(entity) },
+      facets: facets,
+      pageInfo: {
+        page: page,
+        perPage: per_page,
+        total: total
+      }
+    }
   end
 
   def show
@@ -153,12 +229,16 @@ class Api::InternalEntitiesController < ApplicationController
       entityTypeLabel: entity.entity_type_label,
       jurisdictionCountry: entity.jurisdiction_country,
       jurisdictionState: entity.jurisdiction_state,
+      formationDate: entity.formation_date,
       status: entity.status,
       statusLabel: entity.status_label,
       einMasked: entity.ein_masked,
       einLast4: entity.ein_last4,
-      bankAccountsCount: entity.bank_accounts.active.count,
-      signersCount: entity.entity_signers.active.count,
+      stats: {
+        bankAccountsCount: entity.bank_accounts.active.count,
+        signersCount: entity.entity_signers.active.count,
+        documentsCount: entity.document_links.count
+      },
       createdAt: entity.created_at,
       updatedAt: entity.updated_at
     }
@@ -222,18 +302,23 @@ class Api::InternalEntitiesController < ApplicationController
           statusLabel: es.status_label
         }
       },
-      documents: entity.document_links.includes(:document).map { |link|
+      documents: entity.document_links.includes(:document).order('documents.created_at DESC').limit(10).map { |link|
         {
           id: link.document.id,
           linkId: link.id,
           name: link.document.name,
           title: link.document.display_title,
           category: link.document.category,
+          docType: link.document.doc_type,
+          status: link.document.status,
           relationship: link.relationship,
           visibility: link.visibility,
-          createdAt: link.document.created_at
+          createdAt: link.document.created_at,
+          updatedAt: link.document.updated_at
         }
       },
+      documentsCount: entity.document_links.count,
+      linkedDeals: linked_deals_for_entity(entity),
       createdBy: entity.created_by ? {
         id: entity.created_by.id,
         name: entity.created_by.full_name
@@ -245,6 +330,26 @@ class Api::InternalEntitiesController < ApplicationController
       createdAt: entity.created_at,
       updatedAt: entity.updated_at
     }
+  end
+
+  def linked_deals_for_entity(entity)
+    # Find deals that share documents with this entity
+    # First get all document IDs linked to this entity
+    doc_ids = entity.document_links.pluck(:document_id)
+    return [] if doc_ids.empty?
+
+    # Find deals that also have links to these documents
+    deal_ids = DocumentLink.where(document_id: doc_ids, linkable_type: 'Deal').pluck(:linkable_id).uniq
+    return [] if deal_ids.empty?
+
+    Deal.where(id: deal_ids).limit(10).map do |deal|
+      {
+        id: deal.id,
+        name: deal.name,
+        status: deal.status,
+        company: deal.company&.name
+      }
+    end
   end
 
   # Mock current_user if not implemented
