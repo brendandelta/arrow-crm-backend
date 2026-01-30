@@ -188,7 +188,7 @@ class Deal < ApplicationRecord
     # Missing docs: critical diligence documents missing
     required_docs = Document::DILIGENCE_KINDS rescue []
     if required_docs.any?
-      existing_kinds = documents.pluck(:kind).compact
+      existing_kinds = documents.pluck(:doc_type).compact
       missing = required_docs - existing_kinds
       if missing.any?
         flags[:missing_docs] = {
