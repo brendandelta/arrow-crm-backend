@@ -105,7 +105,7 @@ class Api::InterestsController < ApplicationController
         id: interest.contact.id,
         firstName: interest.contact.first_name,
         lastName: interest.contact.last_name,
-        title: interest.contact.title,
+        title: interest.contact.current_title,
         email: interest.contact.primary_email,
         phone: interest.contact.primary_phone
       } : nil,

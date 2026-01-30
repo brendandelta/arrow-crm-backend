@@ -123,7 +123,7 @@ class Api::BlocksController < ApplicationController
         id: block.contact.id,
         firstName: block.contact.first_name,
         lastName: block.contact.last_name,
-        title: block.contact.title,
+        title: block.contact.current_title,
         email: block.contact.primary_email,
         phone: block.contact.primary_phone
       } : nil,
