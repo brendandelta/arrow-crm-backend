@@ -109,14 +109,14 @@ class Api::DealsController < ApplicationController
     risk_flags = deal.risk_flags.present? ? deal.risk_flags : deal.compute_risk_flags
 
     # Document checklist
-    existing_doc_kinds = deal.documents.pluck(:kind).compact
+    existing_doc_kinds = deal.documents.pluck(:doc_type).compact
     doc_checklist = Document::DILIGENCE_KINDS.map do |kind|
       {
         kind: kind,
         label: kind.titleize,
         category: Document::DILIGENCE_CATEGORIES.find { |_, kinds| kinds.include?(kind) }&.first || "Other",
         present: existing_doc_kinds.include?(kind),
-        document: deal.documents.find { |d| d.kind == kind }&.then { |d|
+        document: deal.documents.find { |d| d.doc_type == kind }&.then { |d|
           { id: d.id, name: d.name, url: d.url, uploadedAt: d.created_at }
         }
       }
@@ -175,6 +175,9 @@ class Api::DealsController < ApplicationController
       tags: deal.tags || [],
       notes: deal.internal_notes,
       structureNotes: deal.structure_notes,
+      minRaise: deal.min_raise_cents,
+      maxRaise: deal.max_raise_cents,
+      customFields: deal.custom_fields || {},
 
       # Truth Panel data
       truthPanel: {
@@ -340,7 +343,15 @@ class Api::DealsController < ApplicationController
   def update
     deal = Deal.find(params[:id])
 
-    if deal.update(deal_params)
+    # Deep merge custom_fields to preserve existing keys
+    update_params = deal_params.to_h
+    if update_params[:custom_fields].present?
+      existing_custom_fields = deal.custom_fields || {}
+      incoming_custom_fields = update_params[:custom_fields].to_h
+      update_params[:custom_fields] = existing_custom_fields.deep_merge(incoming_custom_fields)
+    end
+
+    if deal.update(update_params)
       render json: { id: deal.id, success: true }
     else
       render json: { errors: deal.errors.full_messages }, status: :unprocessable_entity
@@ -470,10 +481,12 @@ class Api::DealsController < ApplicationController
       :name, :kind, :company_id, :status, :stage, :priority, :confidence,
       :deal_owner, :target_cents, :committed_cents, :closed_cents, :valuation_cents,
       :share_price_cents, :share_class, :expected_close, :deadline,
+      :min_raise_cents, :max_raise_cents,
       :sourced_at, :qualified_at, :closed_at, :source, :source_detail,
       :drive_url, :data_room_url, :deck_url, :notion_url,
       :internal_notes, :structure_notes, :owner_id,
-      tags: [], team_member_ids: []
+      tags: [], team_member_ids: [],
+      custom_fields: {}
     )
   end
 
