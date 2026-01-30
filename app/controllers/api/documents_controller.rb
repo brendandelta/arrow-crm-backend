@@ -325,8 +325,8 @@ class Api::DocumentsController < ApplicationController
       isPdf: doc.pdf?,
       isSpreadsheet: doc.spreadsheet?,
       isDocument: doc.document?,
-      url: doc.url,
-      fileUrl: doc.file.attached? ? Rails.application.routes.url_helpers.rails_blob_url(doc.file, only_path: true) : nil,
+      url: doc.file.attached? ? doc.file.url : doc.url,
+      fileUrl: doc.file.attached? ? doc.file.url : nil,
       version: doc.version,
       versionGroupId: doc.version_group_id,
       isLatestVersion: doc.latest_version?,
@@ -368,14 +368,9 @@ class Api::DocumentsController < ApplicationController
     }
 
     # Add preview URL for PDFs and images
-    # Uses ActiveStorage's built-in signed URL handling
-    # Expiration is controlled by config.active_storage.service_urls_expire_in
+    # Uses direct S3 signed URL for cross-domain access
     if include_preview_url && doc.file.attached? && (doc.pdf? || doc.image?)
-      json[:previewUrl] = Rails.application.routes.url_helpers.rails_blob_url(
-        doc.file,
-        disposition: 'inline',
-        only_path: true
-      )
+      json[:previewUrl] = doc.file.url(disposition: 'inline')
     end
 
     json
