@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_01_28_200005) do
+ActiveRecord::Schema[7.2].define(version: 2026_01_30_200001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -192,6 +192,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_200005) do
     t.boolean "rofr", default: false
     t.boolean "transfer_approval_required", default: false
     t.boolean "issuer_approval_required", default: false
+    t.string "name"
     t.index ["broker_contact_id"], name: "index_blocks_on_broker_contact_id"
     t.index ["broker_id"], name: "index_blocks_on_broker_id"
     t.index ["contact_id"], name: "index_blocks_on_contact_id"
@@ -357,13 +358,13 @@ ActiveRecord::Schema[7.2].define(version: 2026_01_28_200005) do
   create_table "documents", force: :cascade do |t|
     t.string "name", null: false
     t.string "doc_type"
-    t.string "url", null: false
+    t.string "url"
     t.string "file_type"
     t.bigint "file_size_bytes"
     t.string "storage"
     t.integer "version", default: 1
-    t.string "parent_type", null: false
-    t.bigint "parent_id", null: false
+    t.string "parent_type"
+    t.bigint "parent_id"
     t.bigint "uploaded_by_id"
     t.text "description"
     t.boolean "is_confidential", default: false
