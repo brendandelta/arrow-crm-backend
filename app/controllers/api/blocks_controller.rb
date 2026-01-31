@@ -46,7 +46,7 @@ class Api::BlocksController < ApplicationController
 
   def block_params
     params.permit(
-      :deal_id, :seller_id, :contact_id, :seller_type,
+      :name, :deal_id, :seller_id, :contact_id, :seller_type,
       :share_class, :shares, :price_cents, :total_cents, :min_size_cents,
       :implied_valuation_cents, :discount_pct, :valuation_date,
       :status, :expires_at, :source, :source_detail,
@@ -106,6 +106,7 @@ class Api::BlocksController < ApplicationController
   def block_json(block, full: false)
     data = {
       id: block.id,
+      name: block.name,
       dealId: block.deal_id,
       dealName: block.deal&.name,
       underlyingCompany: block.underlying_company ? {
