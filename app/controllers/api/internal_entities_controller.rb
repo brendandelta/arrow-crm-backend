@@ -144,7 +144,7 @@ class Api::InternalEntitiesController < ApplicationController
   end
 
   def destroy
-    @internal_entity.update!(status: 'dissolved')
+    @internal_entity.destroy!
     render json: { success: true }
   end
 
